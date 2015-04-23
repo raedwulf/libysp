@@ -235,9 +235,6 @@ int momcts_random_walk(struct momcts_s *momcts,
 		act_t a,
 		rwd_t *reward)
 {
-#if PARETO == 1
-	struct reward_s **P = &momcts->front;
-#endif
 	uint32_t n = momcts->sim->reward_count;
 	/* for storing cumulative rewards on stack */
 	rwd_t sr[momcts->sim->max_steps + 1][n];
@@ -343,7 +340,14 @@ int momcts_random_walk(struct momcts_s *momcts,
 			if (expand) break;
 #endif
 		}
+		for (uint32_t i = 0; i < momcts->sim->reward_count; i++)
+			sr[0][i] += p->obs.rwd->value[i] / p->nv;
 		rwd_t *r = sr[0];
+#if PARETO == 1
+		struct reward_s **P = &momcts->front;
+#elif PARETO == 2
+		//struct reward_s **P = &
+#endif
 		/* if archive empty */
 		if (*P == NULL) {
 			*P = ARCHIVE_ALLOC();

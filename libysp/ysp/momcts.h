@@ -28,12 +28,14 @@ struct momcts_act_s {
 	struct momcts_obs_s  *chd;
 	act_t                 id;
 	uint32_t              nv;
+
 #if PARETO == 2
 	int64_t               hv;
 	struct reward_s      *front;
 #endif
 };
 
+/* observation node in tree is one possible future state */
 struct momcts_obs_s {
 	int                   type;
 	struct momcts_obs_s  *next;
@@ -42,7 +44,7 @@ struct momcts_obs_s {
 	obs_t                 id;
 	uint32_t              nv;
 
-	struct reward_s      *rwd;
+	struct reward_s      *rwd; /* avg score of remaining simulation steps */
 	uint32_t              nb;
 	struct belief_s      *bel;
 };
