@@ -283,6 +283,7 @@ int momcts_random_walk(struct momcts_s *momcts,
 				c = c->next;
 			}
 			/* action/observation doesn't exist, create it */
+			bool expand = false;
 			if (c == NULL) {
 				c = NODE_ALLOC();
 				c->type = NODE_ACT;
@@ -294,6 +295,7 @@ int momcts_random_walk(struct momcts_s *momcts,
 				c->par = parent;
 				c->next = parent->chd;
 				parent->chd = c;
+				expand = true;
 			}
 			/* observation does not exist, create it */
 			if (cc == NULL) {
@@ -308,6 +310,7 @@ int momcts_random_walk(struct momcts_s *momcts,
 				cc->obs.bel = NULL;
 				cc->obs.rwd = REWARD_ALLOC();
 				memset(cc->obs.rwd, 0, SIZEOF_REWARD(momcts->sim->reward_count));
+				expand = true;
 			}
 			/* update the beliefs */
 			struct belief_s *b = cc->obs.bel;
@@ -336,6 +339,9 @@ int momcts_random_walk(struct momcts_s *momcts,
 			cc->nv++;
 			parent = cc;
 			c = cc->chd;
+#ifndef EXPANDALLTRACE
+			if (expand) break;
+#endif
 		}
 		rwd_t *r = sr[0];
 		/* if archive empty */
