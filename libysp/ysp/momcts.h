@@ -6,6 +6,7 @@
 #include <stdio.h>
 
 #include "types.h"
+#include "belief.h"
 #include "mempool.h"
 #include "xorshift.h"
 #include "simulate.h"
@@ -83,7 +84,7 @@ struct momcts_s {
 	double *       c;
 
 	/* internal persistant state of search */
-	XorShiftState         random;
+	struct xs_state_s    random;
 	union momcts_node_s  *root;
 	struct mempool_s     *nodes;
 	struct mempool_s     *beliefs;
@@ -101,11 +102,11 @@ int momcts_search(struct momcts_s *momcts,
 		  uint32_t n);
 int momcts_tree_walk(struct momcts_s *momcts,
 		     union momcts_node_s *node,
-		     ste_t s,
+		     struct belief_s *pb,
 		     rwd_t *reward);
 int momcts_random_walk(struct momcts_s *momcts,
 		       union momcts_node_s *p,
-		       ste_t s,
+		       struct belief_s *pb,
 		       act_t a,
 		       rwd_t *reward);
 int momcts_dot(struct momcts_s *momcts, union momcts_node_s *node,

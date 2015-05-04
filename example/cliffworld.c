@@ -109,7 +109,9 @@ int main(int argc, char **argv)
 	root.obs.bel->next = NULL;
 	root.obs.bel->state = mempool_alloc(sim.states);
 	memcpy(root.obs.bel->state, &is, sizeof(is));
-	root.obs.bel->sample_count = 1;
+#ifndef BELIEFCHAIN
+	root.obs.bel->n = 1;
+#endif
 	root.obs.rwd = mempool_alloc(momcts.rewards);
 	root.obs.rwd->value[0] = 0;
 	root.obs.rwd->value[1] = 0;
@@ -227,8 +229,8 @@ int cw_allowed(struct belief_s *b, size_t *a)
 
 int cw_run(struct instance_s *i, void *sv, act_t a)
 {
-	XorShiftState *r = &i->random;
-	uint64_t n = xorshift1024_s(r);
+	struct xs_state_s *r = &i->random;
+	uint64_t n = xs1024_s(r);
 
 	struct cw_state_s s;
 	struct cw_state_s *ss = i->states;
@@ -252,7 +254,7 @@ int cw_run(struct instance_s *i, void *sv, act_t a)
 
 	for (; e < 32; e++) {
 		if ((e & (sizeof(n) * 8 - 1)) == 0)
-			n = xorshift1024_s(r);
+			n = xs1024_s(r);
 		else
 			n >>= 1;
 		t = ITS(i->trace, 2, e);

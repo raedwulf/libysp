@@ -4,6 +4,7 @@
 #include <assert.h>
 #include "ysp/momcts.h"
 #include "ysp/pareto.h"
+#include "ysp/sample.h"
 
 /* macros for clarity */
 #define PWC_TEST(nc) (!((uint32_t)sqrt(nc + 1) > (uint32_t)sqrt(nc)))
@@ -36,7 +37,7 @@ void ucb(struct momcts_s *momcts, struct momcts_act_s *c, rwd_t *rsa)
 int momcts_init(struct momcts_s *momcts)
 {
 	int n = momcts->sim->reward_count;
-	xorshift1024_init_s(momcts->initial_seed, &(momcts->random));
+	xs1024_init_s(momcts->initial_seed, &(momcts->random));
 	if (!momcts->max_nodes)
 		momcts->max_nodes = DEFAULT_MOMCTS_MAX_NODES;
 	if (!momcts->max_beliefs)
@@ -47,7 +48,7 @@ int momcts_init(struct momcts_s *momcts)
 			momcts->max_nodes);
 	if (!momcts->nodes)
 		return -1;
-	momcts->beliefs = mempool_create(NULL, NULL, sizeof(struct belief_s),
+	momcts->beliefs = mempool_create(NULL, NULL, SIZEOF_BELIEF(n),
 			momcts->max_beliefs);
 	if (!momcts->beliefs)
 		return -1;
@@ -93,10 +94,10 @@ int momcts_search(struct momcts_s *momcts,
 	while (n) {
 		uint64_t bits = momcts->force_random_sample ||
 			n < no->nb ?
-			xorshift1024_s(&(momcts->random)) : UINT64_MAX;
+			xs1024_s(&(momcts->random)) : UINT64_MAX;
 		for (uint64_t i = 0; i < 64 && n; i++) {
 			if (bits & 1) {
-				momcts_tree_walk(momcts, node, b->state, r);
+				momcts_tree_walk(momcts, node, b, r);
 				n--;
 			}
 			b = b->next ? b->next : no->bel;
@@ -108,10 +109,9 @@ int momcts_search(struct momcts_s *momcts,
 
 int momcts_tree_walk(struct momcts_s *momcts,
 		     union momcts_node_s *n,
-		     ste_t s,
+		     struct belief_s *pb,
 		     rwd_t *reward)
 {
-	struct belief_s b = { .sample_count = 1, .next = NULL };
 	size_t allowed[momcts->sim->action_bmax];
 	int v = 1;
 	assert(n->type == NODE_OBS);
@@ -138,30 +138,21 @@ int momcts_tree_walk(struct momcts_s *momcts,
 		} while ((c = c->next));
 
 		/* sample observations */
-		uint32_t os = xorshift1024_s(&(momcts->random)) % mc->nv;
-		struct momcts_obs_s *oi = mc->chd;
-		while (os > oi->nv) {
-			os -= oi->nv;
-			oi = oi->next;
-		}
-		assert(oi);
+		struct momcts_obs_s *oi = sample_nc(&momcts->random, mc->chd, mc->nv);
 
 		/* TODO: speed up belief sampling using belief set */
 		/* continue walking down node using random state in child */
-		uint32_t bs = xorshift1024_s(&(momcts->random)) % oi->nb;
-		struct belief_s *bi = oi->bel;
-		while (bs > bi->sample_count) {
-			bs -= bi->sample_count;
-			bi = bi->next;
-		}
-		assert(bi);
+#ifdef BELIEFCHAIN
+		struct belief_s *bi = sample_r(&momcts->random, oi->bel);
+#else
+		struct belief_s *bi = sample_nc(&momcts->random, oi->bel, oi->nb);
+#endif
 
 		/* check if there is any allowed actions from this state */
-		b.state = bi->state;
-		int count = momcts->sim->allowed(&b, allowed);
+		int count = momcts->sim->allowed(bi, allowed);
 
 		if (count) {
-			v = momcts_tree_walk(momcts, (union momcts_node_s *)oi, bi->state, reward);
+			v = momcts_tree_walk(momcts, (union momcts_node_s *)oi, bi, reward);
 			/* update the visit count of the current node and cumulative reward */
 			n->nv += v;
 			for (uint32_t i = 0; i < momcts->sim->reward_count; i++) {
@@ -171,14 +162,13 @@ int momcts_tree_walk(struct momcts_s *momcts,
 		}
 	}
 	/* try taking an action from this state instead */
-	b.state = s;
-	momcts->sim->allowed(&b, allowed);
+	momcts->sim->allowed(pb, allowed);
 	/* create new nodes randomly down the search tree which
-		* have never been visited before */
+	 * have never been visited before */
 	act_t ma = TERMINATION_ACTION;
 	uint32_t min = UINT32_MAX;
 	act_t a = 0;
-	/* reservoir sampling ~ Knuth */
+	/* reservoir sampling of unvisited actions ~ Knuth */
 	int seen = 0;
 	uint64_t j = 0;
 	for (; a < momcts->sim->action_count; a++) {
@@ -194,9 +184,11 @@ int momcts_tree_walk(struct momcts_s *momcts,
 			else if (j <= 1)
 				ma = a;
 			seen++;
-			j = (xorshift1024_s(&(momcts->random)) % seen) + 1;
+			/* TODO: use xs1024_bs to use call this less often */
+			j = (xs1024_s(&(momcts->random)) % seen) + 1;
 		}
 	}
+	/* nothing spotted, just find the least visited action */
 	if (!seen) {
 		for (a = 0; a < momcts->sim->action_count; a++) {
 			union momcts_node_s *c = n->chd;
@@ -219,7 +211,7 @@ int momcts_tree_walk(struct momcts_s *momcts,
 	}
 
 	/* simulate the action to get an observation */
-	v = momcts_random_walk(momcts, n, s, ma, reward);
+	v = momcts_random_walk(momcts, n, pb, ma, reward);
 
 	/* update the visit count of the current node and cumulative reward */
 	n->nv += v;
@@ -231,7 +223,7 @@ int momcts_tree_walk(struct momcts_s *momcts,
 
 int momcts_random_walk(struct momcts_s *momcts,
 		union momcts_node_s *p,
-		ste_t s,
+		struct belief_s *pb,
 		act_t a,
 		rwd_t *reward)
 {
@@ -239,7 +231,7 @@ int momcts_random_walk(struct momcts_s *momcts,
 	/* for storing cumulative rewards on stack */
 	rwd_t sr[momcts->sim->max_steps + 1][n];
 	/* run the simulations for sim_instances_count and for max_step_count */
-	sim_run(momcts->sim, s, a);
+	sim_run(momcts->sim, pb->state, a);
 	/* TODO: should be highly parallel? */
 	int mi = momcts->sim->instance_count;
 	for (int i = 0; i < mi; i++) {
@@ -310,20 +302,30 @@ int momcts_random_walk(struct momcts_s *momcts,
 				expand = true;
 			}
 			/* update the beliefs */
+#ifdef BELIEFCHAIN
+			/* always add beliefs in belief chain mode */
+			struct belief_s *b = NULL;
+#else
 			struct belief_s *b = cc->obs.bel;
 			while (b) {
 				if (b->state == s) {
-					b->sample_count++;
+					b->n++;
 					break;
 				}
 				b = b->next;
 			}
+#endif
 			/* add new belief if can't find state */
 			if (!b) {
 				b = BELIEF_ALLOC();
 				b->state = s;
 				b->next = cc->obs.bel;
-				b->sample_count = 1;
+#ifdef BELIEFCHAIN
+				b->parent = pb; pb = b;
+				memcpy(&b->r, r, sizeof(rwd_t) * momcts->sim->reward_count);
+#else
+				b->n = 1;
+#endif
 				cc->obs.bel = b;
 			}
 			cc->obs.nb++;

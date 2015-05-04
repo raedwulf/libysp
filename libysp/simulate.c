@@ -22,11 +22,11 @@ int sim_init(struct simulation_s *sim)
 	sim->action_bmax = MAX_ALLOWED(sim->action_count);
 	if (!sim->traces)
 		return -1;
-	xorshift1024_init_s(sim->initial_seed, &sim->random);
+	xs1024_init_s(sim->initial_seed, &sim->random);
 	for (int j = 0; j < sim->instance_count; j++) {
 		struct instance_s *i = sim->instances + j;
-		i->initial_seed = xorshift1024_s(&sim->random);
-		xorshift1024_init_s(i->initial_seed, &i->random);
+		i->initial_seed = xs1024_s(&sim->random);
+		xs1024_init_s(i->initial_seed, &i->random);
 		i->states = malloc(sim->state_size * sim->max_steps);
 		if (!i->states)
 			return -1;

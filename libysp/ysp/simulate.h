@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <unistd.h>
 #include "types.h"
+#include "belief.h"
 #include "xorshift.h"
 #include "mempool.h"
 
@@ -30,7 +31,7 @@ struct trace_step_s {
 
 struct instance_s {
 		uint64_t initial_seed;      /* initial seed setup */
-		XorShiftState random;
+		struct xs_state_s random;
 		void *states;
 		int length;
 		struct trace_step_s *trace;
@@ -42,7 +43,7 @@ struct simulation_s {
 
 	/* model that simulator should set */
 	uint64_t initial_seed;      /* initial seed setup */
-	XorShiftState random;
+	struct xs_state_s random;
 	uint32_t max_states;
 	uint32_t num_states;
 	uint32_t state_size;

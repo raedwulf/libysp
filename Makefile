@@ -19,6 +19,7 @@ LIBYSPSRC = \
 	libysp/momcts.c \
 	libysp/simulate.c \
 	libysp/pareto.c \
+	libysp/sample.c \
 	libysp/hashset.c \
 	libysp/xxhash.c \
 	libysp/wfg.c
