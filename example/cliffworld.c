@@ -113,8 +113,8 @@ int main(int argc, char **argv)
 	root.obs.bel->n = 1;
 #endif
 	root.obs.rwd = mempool_alloc(momcts.rewards);
-	root.obs.rwd->value[0] = 0;
-	root.obs.rwd->value[1] = 0;
+	root.obs.rwd[0] = 0;
+	root.obs.rwd[1] = 0;
 	
 	momcts_search(&momcts, &root, 10000);
 	FILE *f = fopen("cw.dot", "w");

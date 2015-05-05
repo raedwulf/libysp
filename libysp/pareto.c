@@ -5,17 +5,18 @@
 /* TODO: need to move away from this GPL library */
 #include "wfg.h"
 
-static inline void rn_ubc(double *rn, int32_t *r, double *c, int d,
+static inline void rn_ubc(double *rn, rwd_t *r, double *c, int d,
                           uint32_t nv, uint32_t nav)
 {
 	for (int i = 0; i < d; i++)
 		rn[i] = (double)r[i] + sqrt(c[i] * log(nv) / nav);
 }
 
-static int wfg_prep(int n, int32_t *r, struct reward_s *ps, FRONT *front, int32_t *z)
+static int wfg_prep(int n, rwd_t *r, struct reward_list_s *ps, FRONT *front,
+                    rwd_t *z)
 {
 	int c = 0;
-	struct reward_s *p = ps;
+	struct reward_list_s *p = ps;
 	/* count the number of points in the front */
 	while (p) {
 		c++;
@@ -67,7 +68,7 @@ int polycmp(const void *v1, const void *v2, void *arg)
 {
 	const POINT *p1 = (POINT *)v1;
 	const POINT *p2 = (POINT *)v2;
-	int32_t *rss = (int32_t *)arg;
+	rwd_t *rss = (rwd_t *)arg;
 	int n = rss[0];
 	rss++;
 	OBJECTIVE d1 = 0, d2 = 0;
@@ -82,9 +83,9 @@ int polycmp(const void *v1, const void *v2, void *arg)
 	return (int)(d1 - d2); /* TODO: check ordering */
 }
 
-int64_t mohv(int n, rwd_t *rsa, struct reward_s **P, rwd_t *z)
+int64_t mohv(int n, rwd_t *rsa, struct reward_list_s **P, rwd_t *z)
 {
-	struct reward_s *p = *P;
+	struct reward_list_s *p = *P;
 	FRONT front;
 	int notdominated = wfg_prep(n, rsa, p, &front, z);
 	double result = 0;
@@ -99,7 +100,7 @@ int64_t mohv(int n, rwd_t *rsa, struct reward_s **P, rwd_t *z)
 		double b = front.nPoints ? hv(front) : 0;
 		result = a - b;
 	} else { /* calculate approximate distance to pareto front */
-		int32_t rss[n+1]; rss[0] = n;
+		rwd_t rss[n+1]; rss[0] = n;
 		for (int i = 0; i < n; i++) rss[i+1] = rsa[i];
 		qsort_r(front.points, front.nPoints, sizeof(POINT), polycmp, rss);
 		OBJECTIVE avg[n];

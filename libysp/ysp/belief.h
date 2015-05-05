@@ -18,7 +18,8 @@ struct belief_s {
 	ste_t state;
 #ifdef BELIEFCHAIN
 	struct belief_s *parent; /* TODO: is this necessary? */
-	rwd_t r[1];
+	rwd_t *r;
+	rwd_t *rt;
 #endif
 };
 

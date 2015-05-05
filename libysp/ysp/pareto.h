@@ -4,13 +4,13 @@
 #include <stdint.h>
 #include "types.h"
 
-struct reward_s {
-	struct reward_s *next;
+struct reward_list_s {
+	struct reward_list_s *next;
 	rwd_t value[1];
 };
-#define SIZEOF_REWARD(n) (sizeof(struct reward_s) + (n-1) * sizeof(rwd_t))
+#define SIZEOF_REWARD_LIST(n) (sizeof(struct reward_list_s) + (n-1) * sizeof(rwd_t))
 
-static inline int dominate(uint32_t n, int32_t *r, int32_t *p)
+static inline int dominate(uint32_t n, rwd_t *r, rwd_t *p)
 {
 	uint32_t greater = 0;
 	uint32_t lesser = 0;
@@ -26,7 +26,7 @@ static inline int dominate(uint32_t n, int32_t *r, int32_t *p)
 		return 0;
 }
 
-int64_t mohv(int n, rwd_t *rsa, struct reward_s **P, rwd_t *z);
+int64_t mohv(int n, rwd_t *rsa, struct reward_list_s **P, rwd_t *z);
 
 #ifndef PARETO
 #define PARETO 2

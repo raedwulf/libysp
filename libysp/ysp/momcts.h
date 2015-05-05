@@ -32,7 +32,7 @@ struct momcts_act_s {
 
 #if PARETO == 2
 	int64_t               hv;
-	struct reward_s      *front;
+	struct reward_list_s *front;
 #endif
 };
 
@@ -45,7 +45,7 @@ struct momcts_obs_s {
 	obs_t                 id;
 	uint32_t              nv;
 
-	struct reward_s      *rwd; /* avg score of remaining simulation steps */
+	rwd_t                *rwd; /* avg score of remaining simulation steps */
 	uint32_t              nb;
 	struct belief_s      *bel;
 };
@@ -91,7 +91,7 @@ struct momcts_s {
 	struct mempool_s     *archive;
 	struct mempool_s     *rewards;
 #if PARETO == 1
-	struct reward_s      *front;
+	struct reward_list_s *front;
 #endif
 };
 

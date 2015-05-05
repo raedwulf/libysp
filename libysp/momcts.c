@@ -27,7 +27,7 @@ void ucb(struct momcts_s *momcts, struct momcts_act_s *c, rwd_t *rsa)
 	while (o) {
 		tnv += o->nv;
 		for (uint32_t i = 0; i < momcts->sim->reward_count; i++)
-			rsa[i] += o->rwd->value[i];
+			rsa[i] += o->rwd[i];
 		o = o->next;
 	}
 	for (uint32_t i = 0; i < momcts->sim->reward_count; i++)
@@ -52,12 +52,12 @@ int momcts_init(struct momcts_s *momcts)
 			momcts->max_beliefs);
 	if (!momcts->beliefs)
 		return -1;
-	momcts->archive = mempool_create(NULL, NULL, SIZEOF_REWARD(n),
+	momcts->archive = mempool_create(NULL, NULL, SIZEOF_REWARD_LIST(n),
 			momcts->max_archive);
 	if (!momcts->archive)
 		return -1;
 	//momcts->reference = calloc(momcts->sim->reward_count, sizeof(rwd_t));
-	momcts->rewards = mempool_create(NULL, NULL, SIZEOF_REWARD(n),
+	momcts->rewards = mempool_create(NULL, NULL, sizeof(rwd_t) * n,
 		momcts->max_rewards);
 	if (!momcts->rewards)
 		return -1;
@@ -89,7 +89,8 @@ int momcts_search(struct momcts_s *momcts,
 	assert(node->type == NODE_OBS);
 	struct momcts_obs_s *no = &node->obs;
 	struct belief_s *b = no->bel;
-	int32_t r[momcts->sim->reward_count];
+	rwd_t r[momcts->sim->reward_count];
+	memset(r, 0, sizeof(r));
 	momcts->front = NULL;
 	while (n) {
 		uint64_t bits = momcts->force_random_sample ||
@@ -116,7 +117,7 @@ int momcts_tree_walk(struct momcts_s *momcts,
 	int v = 1;
 	assert(n->type == NODE_OBS);
 #if PARETO == 1
-	struct reward_s **P = &momcts->front;
+	struct reward_list_s **P = &momcts->front;
 #endif
 	/* if the node is not a leaf node or search doesn't need widening */
 	if (n->chd && PWC_TEST(n->obs.nv) ) {
@@ -152,11 +153,16 @@ int momcts_tree_walk(struct momcts_s *momcts,
 		int count = momcts->sim->allowed(bi, allowed);
 
 		if (count) {
+#ifdef BELIEFCHAIN
+			for (uint32_t i = 0; i < momcts->sim->reward_count; i++) {
+				reward[i] += bi->r[i];
+			}
+#endif
 			v = momcts_tree_walk(momcts, (union momcts_node_s *)oi, bi, reward);
 			/* update the visit count of the current node and cumulative reward */
 			n->nv += v;
 			for (uint32_t i = 0; i < momcts->sim->reward_count; i++) {
-				n->obs.rwd->value[i] += reward[i];
+				n->obs.rwd[i] += reward[i];
 			}
 			return v;
 		}
@@ -216,7 +222,7 @@ int momcts_tree_walk(struct momcts_s *momcts,
 	/* update the visit count of the current node and cumulative reward */
 	n->nv += v;
 	for (uint32_t i = 0; i < momcts->sim->reward_count; i++) {
-		n->obs.rwd->value[i] += reward[i];
+		n->obs.rwd[i] += reward[i];
 	}
 	return v;
 }
@@ -298,7 +304,7 @@ int momcts_random_walk(struct momcts_s *momcts,
 				c->chd = cc;
 				cc->obs.bel = NULL;
 				cc->obs.rwd = REWARD_ALLOC();
-				memset(cc->obs.rwd, 0, SIZEOF_REWARD(momcts->sim->reward_count));
+				memset(cc->obs.rwd, 0, sizeof(rwd_t) * n);
 				expand = true;
 			}
 			/* update the beliefs */
@@ -322,7 +328,10 @@ int momcts_random_walk(struct momcts_s *momcts,
 				b->next = cc->obs.bel;
 #ifdef BELIEFCHAIN
 				b->parent = pb; pb = b;
-				memcpy(&b->r, r, sizeof(rwd_t) * momcts->sim->reward_count);
+				b->r = REWARD_ALLOC();
+				memcpy(b->r, t->r, sizeof(rwd_t) * n);
+				b->rt = REWARD_ALLOC();
+				memcpy(b->rt, r, sizeof(rwd_t) * n);
 #else
 				b->n = 1;
 #endif
@@ -330,8 +339,8 @@ int momcts_random_walk(struct momcts_s *momcts,
 			}
 			cc->obs.nb++;
 			/* add to the cumulative rewards */
-			for (uint32_t i = 0; i < momcts->sim->reward_count; i++)
-				cc->obs.rwd->value[i] += r[i];
+			for (uint32_t i = 0; i < n; i++)
+				cc->obs.rwd[i] += r[i];
 			/* add the parents avg reward */
 			/* visited once more */
 			c->nv++;
@@ -342,27 +351,25 @@ int momcts_random_walk(struct momcts_s *momcts,
 			if (expand) break;
 #endif
 		}
-		for (uint32_t i = 0; i < momcts->sim->reward_count; i++)
-			sr[0][i] += p->obs.rwd->value[i] / p->nv;
+		for (uint32_t i = 0; i < n; i++)
+			sr[0][i] += p->obs.rwd[i] / p->nv;
 		rwd_t *r = sr[0];
 #if PARETO == 1
-		struct reward_s **P = &momcts->front;
+		struct reward_list_s **P = &momcts->front;
 #elif PARETO == 2
-		//struct reward_s **P = &
+		//struct reward_list_s **P = &
 #endif
 		/* if archive empty */
 		if (*P == NULL) {
 			*P = ARCHIVE_ALLOC();
-			struct reward_s *R = *P;
-			memcpy(R->value, r,
-				momcts->sim->reward_count * sizeof(int32_t));
+			struct reward_list_s *R = *P;
+			memcpy(R->value, r, n * sizeof(rwd_t));
 			R->next = NULL;
 		} else { /* check if r is not dominated by any in P */
-			struct reward_s *p = *P;
-			struct reward_s *lp = NULL;
+			struct reward_list_s *p = *P;
+			struct reward_list_s *lp = NULL;
 			while (p) {
-				int d = dominate(momcts->sim->reward_count, r,
-						p->value);
+				int d = dominate(n, r, p->value);
 				if (d == 0) { /* non-dominated */
 					lp = p;
 					p = p->next;
@@ -377,9 +384,8 @@ int momcts_random_walk(struct momcts_s *momcts,
 					break;
 			}
 			if (p == NULL) { /* if non-dominated, add to archive */
-				struct reward_s *R = ARCHIVE_ALLOC();
-				memcpy(R->value, r,
-					momcts->sim->reward_count * sizeof(int32_t));
+				struct reward_list_s *R = ARCHIVE_ALLOC();
+				memcpy(R->value, r, n * sizeof(rwd_t));
 				/* just append */
 				R->next = NULL;
 				if (lp)
@@ -388,7 +394,7 @@ int momcts_random_walk(struct momcts_s *momcts,
 					*P = R;
 			}
 		}
-		for (uint32_t k = 0; k < momcts->sim->reward_count; k++)
+		for (uint32_t k = 0; k < n; k++)
 			reward[k] = r[k];
 	}
 	return mi;
@@ -404,9 +410,10 @@ static void momcts_traverse(struct momcts_s *momcts, union momcts_node_s *node,
 				node->type == NODE_OBS ? 'o' : 'a',
 				node->id);
 		if (node->type == NODE_OBS) {
-			fprintf(out, "r:(%d,%d)",
-					node->obs.rwd->value[0]/(int32_t)node->nv,
-					node->obs.rwd->value[1]/(int32_t)node->nv);
+			/* TODO: fix for arbitrary number of rewards */
+			fprintf(out, "r:(%.3f,%.3f)",
+					node->obs.rwd[0]/(rwd_t)node->nv,
+					node->obs.rwd[1]/(rwd_t)node->nv);
 		}
 		fprintf(out, "\\nv: %u\"];\n",
 				node->nv);
