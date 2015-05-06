@@ -8,14 +8,14 @@ struct lls_s {
 	uint32_t n;
 };
 struct ll_s {
-	struct lls_s *next;
+	struct ll_s *next;
 };
 
 void *sample_nc(struct xs_state_s *rb, void *l, uint32_t n)
 {
 	uint32_t s = xs1024_s(rb) % n;
 	struct lls_s *i = (struct lls_s *)l;
-	while (s > i->n) {
+	while (i && s > i->n) {
 		s -= i->n;
 		i = i->next;
 	}
@@ -29,12 +29,13 @@ void *sample_r(struct xs_state_s *rb, void *l)
 	int seen = 0;
 	struct ll_s *i = (struct ll_s *)l;
 	void *r = i;
-	uint64_t j = 0;
+	i = i->next;
 	while (i) {
 		seen++;
-		if (j <= 1) r = i;
 		/* TODO: use xs1024_bs to use call this less often */
-		j = (xs1024_s(rb) % seen) + 1;
+		uint64_t j = (xs1024_s(rb) % seen) + 1;
+		if (j <= 1) r = i;
+		i = i->next;
 	}
 	return r;
 }

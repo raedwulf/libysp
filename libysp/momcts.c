@@ -153,15 +153,21 @@ int momcts_tree_walk(struct momcts_s *momcts,
 		int count = momcts->sim->allowed(bi, allowed);
 
 		if (count) {
+			/* calculate the cumulative reward so far */
 #ifdef BELIEFCHAIN
 			for (uint32_t i = 0; i < momcts->sim->reward_count; i++) {
 				reward[i] += bi->r[i];
 			}
 #endif
 			v = momcts_tree_walk(momcts, (union momcts_node_s *)oi, bi, reward);
-			/* update the visit count of the current node and cumulative reward */
+			/* update the visit count of the current
+			 * action & observation node and cumulative reward */
+			mc->nv += v;
 			n->nv += v;
 			for (uint32_t i = 0; i < momcts->sim->reward_count; i++) {
+#ifdef BELIEFCHAIN
+				n->obs.rwd[i] += v * bi->r[i];
+#endif
 				n->obs.rwd[i] += reward[i];
 			}
 			return v;
@@ -222,6 +228,9 @@ int momcts_tree_walk(struct momcts_s *momcts,
 	/* update the visit count of the current node and cumulative reward */
 	n->nv += v;
 	for (uint32_t i = 0; i < momcts->sim->reward_count; i++) {
+#ifdef BELIEFCHAIN
+		n->obs.rwd[i] += v * pb->r[i];
+#endif
 		n->obs.rwd[i] += reward[i];
 	}
 	return v;
@@ -351,8 +360,13 @@ int momcts_random_walk(struct momcts_s *momcts,
 			if (expand) break;
 #endif
 		}
+		/* the total cumulative reward for this simulation is */
 		for (uint32_t i = 0; i < n; i++)
+#ifdef BELIEFCHAIN
+			sr[0][i] += reward[i];
+#else
 			sr[0][i] += p->obs.rwd[i] / p->nv;
+#endif
 		rwd_t *r = sr[0];
 #if PARETO == 1
 		struct reward_list_s **P = &momcts->front;

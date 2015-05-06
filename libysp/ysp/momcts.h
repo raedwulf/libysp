@@ -23,12 +23,12 @@
 struct momcts_obs_s;
 
 struct momcts_act_s {
-	int                   type;
 	struct momcts_act_s  *next;
+	uint32_t              nv;
+	int                   type;
 	struct momcts_obs_s  *par;
 	struct momcts_obs_s  *chd;
 	act_t                 id;
-	uint32_t              nv;
 
 #if PARETO == 2
 	int64_t               hv;
@@ -38,12 +38,12 @@ struct momcts_act_s {
 
 /* observation node in tree is one possible future state */
 struct momcts_obs_s {
-	int                   type;
 	struct momcts_obs_s  *next;
+	uint32_t              nv;
+	int                   type;
 	struct momcts_act_s  *par;
 	struct momcts_act_s  *chd;
 	obs_t                 id;
-	uint32_t              nv;
 
 	rwd_t                *rwd; /* avg score of remaining simulation steps */
 	uint32_t              nb;
@@ -52,12 +52,12 @@ struct momcts_obs_s {
 
 union momcts_node_s {
 	struct {
-		int                  type;
 		union momcts_node_s *next;
+		uint32_t             nv;
+		int                  type;
 		union momcts_node_s *par;
 		union momcts_node_s *chd;
 		nid_t                id;
-		uint32_t             nv;
 	};
 	struct momcts_act_s          act;
 	struct momcts_obs_s          obs;

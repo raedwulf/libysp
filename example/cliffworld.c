@@ -109,14 +109,21 @@ int main(int argc, char **argv)
 	root.obs.bel->next = NULL;
 	root.obs.bel->state = mempool_alloc(sim.states);
 	memcpy(root.obs.bel->state, &is, sizeof(is));
-#ifndef BELIEFCHAIN
+#ifdef BELIEFCHAIN
+	root.obs.bel->r = mempool_alloc(momcts.rewards);
+	root.obs.bel->r[0] = 0;
+	root.obs.bel->r[1] = 0;
+	root.obs.bel->rt = mempool_alloc(momcts.rewards);
+	root.obs.bel->rt[0] = 0;
+	root.obs.bel->rt[1] = 0;
+#else
 	root.obs.bel->n = 1;
 #endif
 	root.obs.rwd = mempool_alloc(momcts.rewards);
 	root.obs.rwd[0] = 0;
 	root.obs.rwd[1] = 0;
 	
-	momcts_search(&momcts, &root, 10000);
+	momcts_search(&momcts, &root, 100);
 	FILE *f = fopen("cw.dot", "w");
 	momcts_dot(&momcts, NULL, "cw", f);
 	fclose(f);

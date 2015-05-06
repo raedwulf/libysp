@@ -59,7 +59,7 @@ struct simulation_s {
 	void *traces;
 	struct instance_s instances[MAX_SIM_INSTANCES];
 
-	/* functions for interfacing */
+	/* functions for interfacing model */
 	int (*run)(struct instance_s *, void *, act_t);
 	int (*allowed)(struct belief_s *, size_t *);
 };
