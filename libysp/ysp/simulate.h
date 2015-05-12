@@ -27,7 +27,7 @@ struct trace_step_s {
 #define ITS(t,n,i) ((struct trace_step_s *)(((char *)(t)) + (SIZEOF_TRACESTEP(n) * i)))
 #define SIZETCNT (sizeof(size_t) * 8)
 #define MAX_ALLOWED(a) (a/SIZETCNT + !!(a%SIZETCNT))
-#define ALLOWED(b,a) (b[a/SIZETCNT] & (SIZETCNT-1))
+#define ALLOWED(b,a) (b[a/SIZETCNT] & (1 << a))
 
 struct instance_s {
 		uint64_t initial_seed;      /* initial seed setup */
@@ -62,6 +62,10 @@ struct simulation_s {
 	/* functions for interfacing model */
 	int (*run)(struct instance_s *, void *, act_t);
 	int (*allowed)(struct belief_s *, size_t *);
+	char *(*str_act)(act_t a);
+	char *(*str_obs)(obs_t o);
+	char *(*str_ste)(ste_t s);
+	char *(*str_rwd)(rwd_t *r);
 };
 
 int sim_init(struct simulation_s *sim);

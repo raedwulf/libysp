@@ -7,7 +7,8 @@
 #include "ysp/sample.h"
 
 /* macros for clarity */
-#define PWC_TEST(nc) (!((uint32_t)sqrt(nc + 1) > (uint32_t)sqrt(nc)))
+//#define PWC_TEST(nc) (!((uint32_t)sqrt(nc + 1) > (uint32_t)sqrt(nc)))
+#define PWC_TEST(nc) (!((uint32_t)pow(nc + 1, 1.0 / momcts->b) > (uint32_t)pow(nc, 1.0 / momcts->b)))
 #define NODE_ALLOC()    mempool_alloc(momcts->nodes)
 #define NODE_FREE(x)    mempool_free(momcts->nodes, x)
 #define BELIEF_ALLOC()  mempool_alloc(momcts->beliefs)
@@ -120,7 +121,7 @@ int momcts_tree_walk(struct momcts_s *momcts,
 	struct reward_list_s **P = &momcts->front;
 #endif
 	/* if the node is not a leaf node or search doesn't need widening */
-	if (n->chd && PWC_TEST(n->obs.nv) ) {
+	if (n->chd && PWC_TEST(n->obs.nv)) {
 		/* walk down the search tree */
 		/* select a child from current node */
 		struct momcts_act_s *c = n->obs.chd;
@@ -178,31 +179,32 @@ int momcts_tree_walk(struct momcts_s *momcts,
 	/* create new nodes randomly down the search tree which
 	 * have never been visited before */
 	act_t ma = TERMINATION_ACTION;
-	uint32_t min = UINT32_MAX;
-	act_t a = 0;
 	/* reservoir sampling of unvisited actions ~ Knuth */
 	int seen = 0;
 	uint64_t j = 0;
-	for (; a < momcts->sim->action_count; a++) {
-		if (ALLOWED(allowed, a)) {
-			union momcts_node_s *c = n->chd;
-			while (c) {
-				if (c->id == a)
-					break;
-				c = c->next;
-			}
-			if (c)
-				continue;
-			else if (j <= 1)
-				ma = a;
-			seen++;
-			/* TODO: use xs1024_bs to use call this less often */
-			j = (xs1024_s(&(momcts->random)) % seen) + 1;
+	for (act_t a = 0; a < momcts->sim->action_count; a++) {
+		if (!ALLOWED(allowed, a))
+			continue;
+		union momcts_node_s *c = n->chd;
+		while (c) {
+			if (c->id == a)
+				break;
+			c = c->next;
 		}
+		if (c)
+			continue;
+		else if (j <= 1)
+			ma = a;
+		seen++;
+		/* TODO: use xs1024_bs to use call this less often */
+		j = (xs1024_s(&(momcts->random)) % seen) + 1;
 	}
 	/* nothing spotted, just find the least visited action */
+	uint32_t min = UINT32_MAX;
 	if (!seen) {
-		for (a = 0; a < momcts->sim->action_count; a++) {
+		for (act_t a = 0; a < momcts->sim->action_count; a++) {
+			if (!ALLOWED(allowed, a))
+				continue;
 			union momcts_node_s *c = n->chd;
 			uint32_t count = 0;
 			while (c) {
@@ -419,18 +421,48 @@ static void momcts_traverse(struct momcts_s *momcts, union momcts_node_s *node,
 		union momcts_node_s *parent, FILE *out)
 {
 	if (parent) {
-		fprintf(out, "n%p[label=\"%c%d\\n",
+		char *ns;
+		if (node->type == NODE_OBS && momcts->sim->str_obs) {
+			ns = momcts->sim->str_obs(node->id);
+			fprintf(out, "n%p[label=\"%s\\n", (void *)node, ns);
+			free(ns);
+		} else if (node->type == NODE_ACT && momcts->sim->str_act) {
+			ns = momcts->sim->str_act(node->id);
+			fprintf(out, "n%p[label=\"%s\\n", (void *)node, ns);
+			free(ns);
+		} else {
+			fprintf(out, "n%p[label=\"%c%d\\n",
 				(void *)node,
 				node->type == NODE_OBS ? 'o' : 'a',
 				node->id);
-		if (node->type == NODE_OBS) {
-			/* TODO: fix for arbitrary number of rewards */
-			fprintf(out, "r:(%.3f,%.3f)",
-					node->obs.rwd[0]/(rwd_t)node->nv,
-					node->obs.rwd[1]/(rwd_t)node->nv);
 		}
-		fprintf(out, "\\nv: %u\"];\n",
-				node->nv);
+		if (node->type == NODE_OBS && momcts->sim->str_rwd) {
+			/* TODO: fix for arbitrary number of rewards */
+			double r[momcts->sim->reward_count];
+			for (uint32_t i = 0; i < momcts->sim->reward_count; i++)
+				r[i] = node->obs.rwd[i] / (rwd_t)node->nv;
+			char *rs = momcts->sim->str_rwd(r);
+			fprintf(out, "%s", rs);
+			free(rs);
+		}
+		fprintf(out, "\\nv: %u\", shape=%s];\n",
+				node->nv, node->type == NODE_OBS ? "ellipse" : "box");
+		if (0 && node->type == NODE_OBS) {
+			struct belief_s *bp = node->obs.bel;
+			fprintf(out, "b%p[label=\"", (void *)bp);
+			while (bp) {
+				char *bs = momcts->sim->str_ste(bp->state);
+#ifdef BELIEFCHAIN
+				fprintf(out, "(%s),\\n", bs);
+#else
+				fprintf(out, "(%s)[%d],\\n", bs, bp->n);
+#endif
+				free(bs);
+				bp = bp->next;
+			}
+			fprintf(out, "\", shape=\"doubleoctagon\"];\n");
+			fprintf(out, "n%p->b%p;\n", (void *)node, (void *)node->obs.bel);
+		}
 		fprintf(out, "n%p->n%p;\n", (void *)parent, (void *)node);
 	} else { /* root */
 		fprintf(out, "n%p[label=\"root\"];\n", (void *)node);

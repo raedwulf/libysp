@@ -82,6 +82,7 @@ struct momcts_s {
 
 	/* parameters for tuning */
 	double *       c;
+	double         b;
 
 	/* internal persistant state of search */
 	struct xs_state_s    random;

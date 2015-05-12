@@ -1,4 +1,4 @@
-/**
+/*
  * Cliff World 8x8
  *
  * This is a static example of falling off cliffs
@@ -27,8 +27,8 @@ struct cw_state_s {
 	union {
 		struct {
 			uint8_t terminal;
-			uint16_t x;
-			uint16_t y;
+			int16_t x;
+			int16_t y;
 		};
 		uint64_t dummy;
 	};
@@ -39,15 +39,23 @@ struct cw_state_s {
 
 #define FS 16 * 10
 
+#define WIDTH 4
+#define HEIGHT 4
+
 #define AT 0
 #define AU 1
 #define AD 2
 #define AL 3
 #define AR 4
 
+#define OU (AU - 1)
+#define OD (AD - 1)
+#define OL (AL - 1)
+#define OR (AR - 1)
 #define OS (1 << 2)
 #define OT (1 << 3)
-#define OD (OS|OT)
+#define ODIE (OS|OT)
+#define OG (OT|(1<<4))
 
 #define LOC(x,y) ((uint8_t)((x << 2) | y))
 
@@ -60,10 +68,58 @@ static char *world =
 int cw_allowed(struct belief_s *b, size_t *a);
 int cw_run(struct instance_s *i, void *s, act_t a);
 
+char *str_act(act_t a)
+{
+	switch (a) {
+		case AT: return strdup("terminate");
+		case AU: return strdup("up");
+		case AD: return strdup("down");
+		case AL: return strdup("left");
+		case AR: return strdup("right");
+		default: return strdup("unknown");
+	}
+}
+
+char *str_obs(obs_t o)
+{
+	switch (o) {
+		case OT: return strdup("terminate");
+		case OS | OU: return strdup("slip & up");
+		case OS | OD: return strdup("slip & down");
+		case OS | OL: return strdup("slip & left");
+		case OS | OR: return strdup("slip & right");
+		case OU: return strdup("up");
+		case OD: return strdup("down");
+		case OL: return strdup("left");
+		case OR: return strdup("right");
+		case ODIE: return strdup("die");
+		case OG: return strdup("goal");
+		default: return strdup("unknown");
+	}
+}
+
+char *str_ste(ste_t s)
+{
+	struct cw_state_s *_s = s;
+	int len = snprintf(NULL, 0, "x=%d, y=%d", _s->x, _s->y) + 1;
+	char *str = malloc(len);
+	snprintf(str, len, "x=%d, y=%d", _s->x, _s->y);
+	return str;
+}
+
+char *str_rwd(rwd_t *r)
+{
+	int len = snprintf(NULL, 0, "r=(%.3f, %.3f)", r[0], r[1]) + 1;
+	char *str = malloc(len);
+	snprintf(str, len, "r=(%.3f, %.3f)", r[0], r[1]);
+	return str;
+}
+
+
 int main(int argc, char **argv)
 {
 	rwd_t reference[2] = {100000, 100000};
-	double paramc[2] = {10.0, 10.0};
+	double paramc[2] = {1.0, 1.0};
 	struct simulation_s sim = {
 		.initial_seed = 0xDEADBEEF,
 		.instance_count = DEFAULT_SIM_INSTANCES,
@@ -75,6 +131,10 @@ int main(int argc, char **argv)
 		.reward_count = 2,
 		.run = cw_run,
 		.allowed = cw_allowed,
+		.str_act = str_act,
+		.str_obs = str_obs,
+		.str_ste = str_ste,
+		.str_rwd = str_rwd,
 	};
 	sim_init(&sim);
 	union momcts_node_s root;
@@ -89,7 +149,8 @@ int main(int argc, char **argv)
 		.root = &root,
 		.sim = &sim,
 		.reference = reference,
-		.c = paramc
+		.c = paramc,
+		.b = 1
 	};
 	momcts_init(&momcts);
 
@@ -123,7 +184,7 @@ int main(int argc, char **argv)
 	root.obs.rwd[0] = 0;
 	root.obs.rwd[1] = 0;
 	
-	momcts_search(&momcts, &root, 100);
+	momcts_search(&momcts, &root, 1000);
 	FILE *f = fopen("cw.dot", "w");
 	momcts_dot(&momcts, NULL, "cw", f);
 	fclose(f);
@@ -160,11 +221,12 @@ int cw_act(uint64_t n, int e, struct cw_state_s *s, act_t a, obs_t *o, rwd_t *r)
 {
 	if (s->terminal) return 1;
 
-	r[0] = r[1] = 0;
+	r[0] = r[1] = -1;
 	*o = 0;
+	r[1] = -s->y + s->x-WIDTH+1;
 
 	/* may slip */
-	if (s->x > 0 && s->y < 3) {
+	if (s->x > 0 && s->x < WIDTH) {
 		if (n & 1) {
 			s->y--;
 			*o = OS;
@@ -173,7 +235,7 @@ int cw_act(uint64_t n, int e, struct cw_state_s *s, act_t a, obs_t *o, rwd_t *r)
 
 	/* obey action */
 	switch (a) {
-		case AT: *o = OT; s->terminal = 1; r[0] = -100 + e; return 0;
+		case AT: *o = OT; s->terminal = 1; r[0] = -50 + e; return 0;
 		case AU: s->y++; break;
 		case AD: s->y--; break;
 		case AL: s->x--; break;
@@ -181,57 +243,53 @@ int cw_act(uint64_t n, int e, struct cw_state_s *s, act_t a, obs_t *o, rwd_t *r)
 	}
 	
 	/* fall off cliff */
-	if (s->x != 0 && s->x != 3 && s->y < 1) {
-		*o = OD;
+	if (s->x != 0 && s->x != WIDTH-1 && s->y < 1) {
+		*o = ODIE;
 		r[0] = -100;
-		r[1] = -1;
 		s->terminal = 1;
 		return 0;
 	}
 
 	/* out of the map is illegal */
-	if (s->x < 0 || s->x > 3 || s->y < 0 || s->y > 3) {
-		*o = OD;
+	if (s->x < 0 || s->x >= WIDTH || s->y < 0 || s->y >= HEIGHT) {
+		//assert(false);
+		*o = ODIE;
 		r[0] = -100;
-		r[1] = -2;
 		s->terminal = 1;
 		return 0;
 	}
 
 	/* bonus for getting goal */
-	if (s->x == 3 && s->y == 3) {
-		*o = OT;
-		r[0] = 0;
+	if (s->x == WIDTH-1 && s->y == 0) {
+		*o = OG;
+		r[0] = 1000;
+		r[1] = 1000;
 		s->terminal = 1;
 		return 0;
 	}
 
 	*o |= (a - 1);
 
-	r[0] = -1;
 	return 0;
 }
 
 int cw_allowed(struct belief_s *b, size_t *a)
 {
-	struct belief_s *bp = b;
+	/* bitmask of allowed actions */
 	bool nt = false;
+	a[0] = 1 << AT;
+	struct belief_s *bp = b;
 	while (bp) {
 		struct cw_state_s *s = bp->state;
-		if (!s->terminal) {
-			nt = true;
-			break;
-		}
+		if (!s->terminal) nt = true;
+		if (s->y < HEIGHT - 1) a[0] |= (1 << AU);
+		if (s->y > 0) a[0] |= (1 << AD);
+		if (s->x < WIDTH - 1) a[0] |= (1 << AR);
+		if (s->x > 0) a[0] |= (1 << AL);
 		bp = bp->next;
 	}
-	/* bitmask of allowed actions */
-	int i = 0;
-	a[0] = 0x0;
-	if (nt) {
-		for (; i <= AR; i++)
-			a[0] |= (1 << i);
-	}
-	return i;
+	a[0] = nt ? a[0] : 0;
+	return __builtin_popcount(a[0]);
 }
 
 int cw_run(struct instance_s *i, void *sv, act_t a)
@@ -264,15 +322,32 @@ int cw_run(struct instance_s *i, void *sv, act_t a)
 			n = xs1024_s(r);
 		else
 			n >>= 1;
+
 		t = ITS(i->trace, 2, e);
-		t->a = s.terminal ? 0 : (n >> 1) % (AR + 1);
+
+		size_t allowed;
+		struct belief_s b = { .state = &s, .next = NULL };
+		int count = cw_allowed(&b, &allowed);
+		if (count) {
+			int seen = 1;
+			t->a = AT;
+			for (int i = 1; seen < count; i++) {
+				if (!(allowed & (1 << i)))
+					continue;
+				seen++;
+				if ((xs1024_s(r) % seen) < 1)
+					t->a = i;
+			}
+		}
+
+		t->a = s.terminal ? 0 : t->a;
 		cw_act(n, e, &s, t->a, &t->o, t->r);
 		t->s = ss;
 		memcpy(ss++, &s, sizeof(s));
 		/* terminal state */
 		/* terminal action */
 		if (!t->a)
-			return e;
+			return e + 1;
 	}
 
 	return e;
