@@ -30,7 +30,9 @@ struct momcts_act_s {
 	struct momcts_obs_s  *chd;
 	act_t                 id;
 
-#if PARETO == 2
+#if PARETO == 1
+	rwd_t                *rwd; /* avg score of remaining simulation steps */
+#elif PARETO == 2
 	int64_t               hv;
 	struct reward_list_s *front;
 #endif
@@ -58,6 +60,7 @@ union momcts_node_s {
 		union momcts_node_s *par;
 		union momcts_node_s *chd;
 		nid_t                id;
+		rwd_t                *rwd; /* avg score of remaining simulation steps */
 	};
 	struct momcts_act_s          act;
 	struct momcts_obs_s          obs;

@@ -32,7 +32,7 @@ void ucb(struct momcts_s *momcts, struct momcts_act_s *c, rwd_t *rsa)
 		o = o->next;
 	}
 	for (uint32_t i = 0; i < momcts->sim->reward_count; i++)
-		rsa[i] = rsa[i]/tnv + sqrt(momcts->c[i] * log(c->par->nv)/(double)tnv);
+		rsa[i] = rsa[i]/(rwd_t)tnv + sqrt(momcts->c[i] * log(c->par->nv)/(double)tnv);
 }
 
 int momcts_init(struct momcts_s *momcts)
@@ -167,7 +167,8 @@ int momcts_tree_walk(struct momcts_s *momcts,
 			n->nv += v;
 			for (uint32_t i = 0; i < momcts->sim->reward_count; i++) {
 #ifdef BELIEFCHAIN
-				n->obs.rwd[i] += v * bi->r[i];
+				//TODO: Check probably already added in from reward before?
+				//n->obs.rwd[i] += v * bi->r[i];
 #endif
 				n->obs.rwd[i] += reward[i];
 			}
@@ -231,7 +232,8 @@ int momcts_tree_walk(struct momcts_s *momcts,
 	n->nv += v;
 	for (uint32_t i = 0; i < momcts->sim->reward_count; i++) {
 #ifdef BELIEFCHAIN
-		n->obs.rwd[i] += v * pb->r[i];
+		//TODO: Check probably already added in from reward before?
+		//n->obs.rwd[i] += v * pb->r[i];
 #endif
 		n->obs.rwd[i] += reward[i];
 	}
@@ -440,7 +442,7 @@ static void momcts_traverse(struct momcts_s *momcts, union momcts_node_s *node,
 			/* TODO: fix for arbitrary number of rewards */
 			double r[momcts->sim->reward_count];
 			for (uint32_t i = 0; i < momcts->sim->reward_count; i++)
-				r[i] = node->obs.rwd[i] / (rwd_t)node->nv;
+				r[i] = node->obs.rwd[i] / (rwd_t)node->obs.nv;
 			char *rs = momcts->sim->str_rwd(r);
 			fprintf(out, "%s", rs);
 			free(rs);

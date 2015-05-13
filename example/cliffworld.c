@@ -118,8 +118,8 @@ char *str_rwd(rwd_t *r)
 
 int main(int argc, char **argv)
 {
-	rwd_t reference[2] = {100000, 100000};
-	double paramc[2] = {1.0, 1.0};
+	rwd_t reference[2] = {1000, 1000};
+	double paramc[2] = {0.1, 0.1};
 	struct simulation_s sim = {
 		.initial_seed = 0xDEADBEEF,
 		.instance_count = DEFAULT_SIM_INSTANCES,
@@ -150,7 +150,7 @@ int main(int argc, char **argv)
 		.sim = &sim,
 		.reference = reference,
 		.c = paramc,
-		.b = 1
+		.b = 4
 	};
 	momcts_init(&momcts);
 
@@ -223,7 +223,7 @@ int cw_act(uint64_t n, int e, struct cw_state_s *s, act_t a, obs_t *o, rwd_t *r)
 
 	r[0] = r[1] = -1;
 	*o = 0;
-	r[1] = -s->y + s->x-WIDTH+1;
+	//r[1] = -s->y + s->x-WIDTH+1;
 
 	/* may slip */
 	if (s->x > 0 && s->x < WIDTH) {
@@ -262,8 +262,8 @@ int cw_act(uint64_t n, int e, struct cw_state_s *s, act_t a, obs_t *o, rwd_t *r)
 	/* bonus for getting goal */
 	if (s->x == WIDTH-1 && s->y == 0) {
 		*o = OG;
-		r[0] = 1000;
-		r[1] = 1000;
+		r[0] = 0;
+		r[1] = 0;
 		s->terminal = 1;
 		return 0;
 	}
