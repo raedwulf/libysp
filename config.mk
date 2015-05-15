@@ -15,7 +15,7 @@ CFLAGS   = -std=gnu11 -Wall -pedantic -I./libysp -O0 -g
 #CFLAGS   = -std=gnu11 -Wall -pedantic -I./libysp -O3 -g
 LDFLAGS  = -g -lrt -lm
 
-PARETO ?= 1
+PARETO ?= 2
 CFLAGS += -DPARETO=$(PARETO)
 
 EXPANDALLTRACE ?= 0

@@ -32,9 +32,8 @@ struct momcts_act_s {
 
 #if PARETO == 1
 	rwd_t                *rwd; /* avg score of remaining simulation steps */
-#elif PARETO == 2
-	int64_t               hv;
-	struct reward_list_s *front;
+#else
+	int64_t               gx;
 #endif
 };
 
@@ -50,6 +49,10 @@ struct momcts_obs_s {
 	rwd_t                *rwd; /* avg score of remaining simulation steps */
 	uint32_t              nb;
 	struct belief_s      *bel;
+
+#if PARETO == 2
+	struct front_s       *front;
+#endif
 };
 
 union momcts_node_s {
@@ -95,7 +98,7 @@ struct momcts_s {
 	struct mempool_s     *archive;
 	struct mempool_s     *rewards;
 #if PARETO == 1
-	struct reward_list_s *front;
+	struct front_s *front;
 #endif
 };
 

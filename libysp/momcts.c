@@ -21,6 +21,7 @@
 void ucb(struct momcts_s *momcts, struct momcts_act_s *c, rwd_t *rsa)
 {
 	struct momcts_obs_s *o = c->chd;
+	assert(o);
 	assert(o->type == NODE_OBS);
 	for (uint32_t i = 0; i < momcts->sim->reward_count; i++)
 		rsa[i] = 0;
@@ -92,7 +93,9 @@ int momcts_search(struct momcts_s *momcts,
 	struct belief_s *b = no->bel;
 	rwd_t r[momcts->sim->reward_count];
 	memset(r, 0, sizeof(r));
+#if PARETO == 1
 	momcts->front = NULL;
+#endif
 	while (n) {
 		uint64_t bits = momcts->force_random_sample ||
 			n < no->nb ?
@@ -118,21 +121,26 @@ int momcts_tree_walk(struct momcts_s *momcts,
 	int v = 1;
 	assert(n->type == NODE_OBS);
 #if PARETO == 1
-	struct reward_list_s **P = &momcts->front;
+	struct front_s **P = &momcts->front;
+#elif PARETO == 2
+	struct front_s **P = &n->obs.front;
 #endif
 	/* if the node is not a leaf node or search doesn't need widening */
-	if (n->chd && PWC_TEST(n->obs.nv)) {
+	if (n->chd && PWC_TEST(n->nv)) {
 		/* walk down the search tree */
 		/* select a child from current node */
 		struct momcts_act_s *c = n->obs.chd;
 		struct momcts_act_s *mc = NULL;
+		assert(c->type == NODE_ACT);
 		int64_t max = INT64_MIN;
 		do {
 			rwd_t rsa[momcts->sim->reward_count];
 			ucb(momcts, c, rsa);
 			int64_t gx = mohv(momcts->sim->reward_count,
 				          rsa, P, momcts->reference);
-			//c->hv = gx;
+#if PARETO == 2
+			c->gx = gx;
+#endif
 			if (gx > max) {
 				max = gx;
 				mc = c;
@@ -141,6 +149,7 @@ int momcts_tree_walk(struct momcts_s *momcts,
 
 		/* sample observations */
 		struct momcts_obs_s *oi = sample_nc(&momcts->random, mc->chd, mc->nv);
+		//struct momcts_obs_s *oi = sample_r(&momcts->random, mc->chd);
 
 		/* TODO: speed up belief sampling using belief set */
 		/* continue walking down node using random state in child */
@@ -151,7 +160,8 @@ int momcts_tree_walk(struct momcts_s *momcts,
 #endif
 
 		/* check if there is any allowed actions from this state */
-		int count = momcts->sim->allowed(bi, allowed);
+		struct belief_s b = { .state = bi->state, .next = NULL };
+		int count = momcts->sim->allowed(&b, allowed);
 
 		if (count) {
 			/* calculate the cumulative reward so far */
@@ -261,13 +271,15 @@ int momcts_random_walk(struct momcts_s *momcts,
 		/* accumulate the rewards O(S) */
 		for (uint32_t k = 0; k < momcts->sim->reward_count; k++)
 			sr[instance->length][k] = 0;
+		/* sr contains what is the cumulative reward remaining */
 		for (int j = instance->length - 1; j >= 0; j--) {
 			for (uint32_t k = 0; k < momcts->sim->reward_count; k++)
 				sr[j][k] = ITS(instance->trace,n,j)->r[k] +
 					sr[j+1][k];
 		}
+		union momcts_node_s *cc;
 		for (int j = 0; j < instance->length; j++) {
-			union momcts_node_s *cc = NULL;
+			cc = NULL;
 			struct trace_step_s *t = ITS(instance->trace, n, j);
 			obs_t o = t->o;
 			act_t a = t->a;
@@ -358,6 +370,8 @@ int momcts_random_walk(struct momcts_s *momcts,
 			/* visited once more */
 			c->nv++;
 			cc->nv++;
+			/* TODO: the assert only works with cliffworld */
+			assert(c->id || (c->id == 0 && cc->id == (1<<3)));
 			parent = cc;
 			c = cc->chd;
 #ifndef EXPANDALLTRACE
@@ -367,53 +381,21 @@ int momcts_random_walk(struct momcts_s *momcts,
 		/* the total cumulative reward for this simulation is */
 		for (uint32_t i = 0; i < n; i++)
 #ifdef BELIEFCHAIN
-			sr[0][i] += reward[i];
+			reward[i] += sr[0][i];
 #else
-			sr[0][i] += p->obs.rwd[i] / p->nv;
+			reward[i] = sr[0][i] + p->obs.rwd[i] / p->nv;
 #endif
-		rwd_t *r = sr[0];
 #if PARETO == 1
-		struct reward_list_s **P = &momcts->front;
+		struct front_s **P = &momcts->front;
+		pareto_add(momcts->archive, n, P, reward);
 #elif PARETO == 2
-		//struct reward_list_s **P = &
+		assert(cc);
+		struct front_s **P = &cc->obs.front;
+		do {
+			if (!pareto_add(momcts->archive, n, P, reward))
+				break;
+		} while (cc->par && (cc = cc->par->par));
 #endif
-		/* if archive empty */
-		if (*P == NULL) {
-			*P = ARCHIVE_ALLOC();
-			struct reward_list_s *R = *P;
-			memcpy(R->value, r, n * sizeof(rwd_t));
-			R->next = NULL;
-		} else { /* check if r is not dominated by any in P */
-			struct reward_list_s *p = *P;
-			struct reward_list_s *lp = NULL;
-			while (p) {
-				int d = dominate(n, r, p->value);
-				if (d == 0) { /* non-dominated */
-					lp = p;
-					p = p->next;
-				} else if (d < 0) { /* r dominates p */
-					if (lp)
-						lp->next = p->next;
-					else
-						*P = p->next;
-					p = p->next;
-					//ARCHIVE_FREE(p);
-				} else /* r is dominated by p */
-					break;
-			}
-			if (p == NULL) { /* if non-dominated, add to archive */
-				struct reward_list_s *R = ARCHIVE_ALLOC();
-				memcpy(R->value, r, n * sizeof(rwd_t));
-				/* just append */
-				R->next = NULL;
-				if (lp)
-					lp->next = R;
-				else
-					*P = R;
-			}
-		}
-		for (uint32_t k = 0; k < n; k++)
-			reward[k] = r[k];
 	}
 	return mi;
 }
@@ -446,8 +428,10 @@ static void momcts_traverse(struct momcts_s *momcts, union momcts_node_s *node,
 			char *rs = momcts->sim->str_rwd(r);
 			fprintf(out, "%s", rs);
 			free(rs);
+		} else if (node->type == NODE_ACT) {
+			fprintf(out, "gx=%ld\\n", node->act.gx);
 		}
-		fprintf(out, "\\nv: %u\", shape=%s];\n",
+		fprintf(out, "\\nv=%u\", shape=%s];\n",
 				node->nv, node->type == NODE_OBS ? "ellipse" : "box");
 		if (0 && node->type == NODE_OBS) {
 			struct belief_s *bp = node->obs.bel;

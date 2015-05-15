@@ -12,11 +12,11 @@ static inline void rn_ubc(double *rn, rwd_t *r, double *c, int d,
 		rn[i] = (double)r[i] + sqrt(c[i] * log(nv) / nav);
 }
 
-static int wfg_prep(int n, rwd_t *r, struct reward_list_s *ps, FRONT *front,
+static int wfg_prep(int n, rwd_t *r, struct front_s *ps, FRONT *front,
                     rwd_t *z)
 {
 	int c = 0;
-	struct reward_list_s *p = ps;
+	struct front_s *p = ps;
 	/* count the number of points in the front */
 	while (p) {
 		c++;
@@ -83,9 +83,54 @@ int polycmp(const void *v1, const void *v2, void *arg)
 	return (int)(d1 - d2); /* TODO: check ordering */
 }
 
-int64_t mohv(int n, rwd_t *rsa, struct reward_list_s **P, rwd_t *z)
+int pareto_add(struct mempool_s *m, int n, struct front_s **P, rwd_t *r)
 {
-	struct reward_list_s *p = *P;
+	/* if archive empty */
+	if (*P == NULL) {
+		//*P = ARCHIVE_ALLOC();
+		*P = mempool_alloc(m);
+		struct front_s *R = *P;
+		memcpy(R->value, r, n * sizeof(rwd_t));
+		R->next = NULL;
+		return 1;
+	} else { /* check if r is not dominated by any in P */
+		struct front_s *p = *P;
+		struct front_s *lp = NULL;
+		while (p) {
+			int d = dominate(n, r, p->value);
+			if (d == 0) { /* non-dominated */
+				lp = p;
+				p = p->next;
+			} else if (d < 0) { /* r dominates p */
+				if (lp)
+					lp->next = p->next;
+				else
+					*P = p->next;
+				p = p->next;
+				//ARCHIVE_FREE(p);
+				//mempool_free(m, p);
+			} else /* r is dominated by p */
+				break;
+		}
+		if (p == NULL) { /* if non-dominated, add to archive */
+			//struct front_s *R = ARCHIVE_ALLOC();
+			struct front_s *R = mempool_alloc(m);
+			memcpy(R->value, r, n * sizeof(rwd_t));
+			/* just append */
+			R->next = NULL;
+			if (lp)
+				lp->next = R;
+			else
+				*P = R;
+			return 1;
+		}
+		return 0;
+	}
+}
+
+int64_t mohv(int n, rwd_t *rsa, struct front_s **P, rwd_t *z)
+{
+	struct front_s *p = *P;
 	FRONT front;
 	int notdominated = wfg_prep(n, rsa, p, &front, z);
 	double result = 0;

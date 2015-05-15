@@ -150,7 +150,7 @@ int main(int argc, char **argv)
 		.sim = &sim,
 		.reference = reference,
 		.c = paramc,
-		.b = 4
+		.b = 8
 	};
 	momcts_init(&momcts);
 
@@ -219,7 +219,12 @@ int main(int argc, char **argv)
 
 int cw_act(uint64_t n, int e, struct cw_state_s *s, act_t a, obs_t *o, rwd_t *r)
 {
-	if (s->terminal) return 1;
+	if (s->terminal) {
+		*o = OT;
+		r[0] = -75;
+		r[1] = -s->y + s->x-WIDTH+1;
+		return 1;
+	}
 
 	r[0] = r[1] = -1;
 	*o = 0;
@@ -235,7 +240,7 @@ int cw_act(uint64_t n, int e, struct cw_state_s *s, act_t a, obs_t *o, rwd_t *r)
 
 	/* obey action */
 	switch (a) {
-		case AT: *o = OT; s->terminal = 1; r[0] = -50 + e; return 0;
+		case AT: *o = OT; s->terminal = 1; r[0] = -75; r[1] = -s->y + s->x-WIDTH+1; return 0;
 		case AU: s->y++; break;
 		case AD: s->y--; break;
 		case AL: s->x--; break;
@@ -254,7 +259,7 @@ int cw_act(uint64_t n, int e, struct cw_state_s *s, act_t a, obs_t *o, rwd_t *r)
 	if (s->x < 0 || s->x >= WIDTH || s->y < 0 || s->y >= HEIGHT) {
 		//assert(false);
 		*o = ODIE;
-		r[0] = -100;
+		r[0] = -200;
 		s->terminal = 1;
 		return 0;
 	}
@@ -310,6 +315,7 @@ int cw_run(struct instance_s *i, void *sv, act_t a)
 	cw_act(n, 0, &s, a, &t->o, t->r);
 	t->a = a;
 	t->s = ss;
+	assert((t->a != AT) || (t->a == AT && t->o == OT));
 	memcpy(ss++, &s, sizeof(s));
 	e++;
 
@@ -342,12 +348,15 @@ int cw_run(struct instance_s *i, void *sv, act_t a)
 
 		t->a = s.terminal ? 0 : t->a;
 		cw_act(n, e, &s, t->a, &t->o, t->r);
+		assert((t->a != AT) || (t->a == AT && t->o == OT));
 		t->s = ss;
 		memcpy(ss++, &s, sizeof(s));
 		/* terminal state */
 		/* terminal action */
 		if (!t->a)
 			return e + 1;
+		//if (s.terminal)
+		//	return e;
 	}
 
 	return e;
