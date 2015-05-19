@@ -106,9 +106,10 @@ int pareto_add(struct mempool_s *m, int n, struct front_s **P, rwd_t *r)
 					lp->next = p->next;
 				else
 					*P = p->next;
-				p = p->next;
+				/* TODO: should free here? */
 				//ARCHIVE_FREE(p);
-				//mempool_free(m, p);
+				mempool_free(m, p);
+				p = lp ? lp->next : *P;
 			} else /* r is dominated by p */
 				break;
 		}
