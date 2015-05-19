@@ -22,6 +22,7 @@ static int wfg_prep(int n, rwd_t *r, struct front_s *ps, FRONT *front,
 		c++;
 		p = p->next;
 	}
+	p = ps;
 
 	OBJECTIVE *objs = (OBJECTIVE *)malloc(sizeof(OBJECTIVE) * n * (c + 1));
 	POINT *points = (POINT *)malloc(sizeof(POINT) * (c + 1));
@@ -38,6 +39,9 @@ static int wfg_prep(int n, rwd_t *r, struct front_s *ps, FRONT *front,
 			} else if (d > 0) { /* r dominates p */
 				p = p->next;
 				continue;
+			} else if (d == -2) { /* r on front */
+				/* on front already */
+				notdominated = -2;
 			} else { /* r is dominated by p */
 				notdominated = 0;
 			}
@@ -139,23 +143,29 @@ int64_t mohv(int n, rwd_t *rsa, struct front_s **P, rwd_t *z)
 	if (!front.nPoints)
 		return 0;
 	if (notdominated) { /* calculate the difference in hypervolume */
-		double a = hv(front);
-		free(front.points);
-		free(front.objectives);
-		wfg_prep(n, NULL, p, &front, z);
-		double b = front.nPoints ? hv(front) : 0;
-		result = a - b;
+		/* already on front */
+		if (notdominated == -2) {
+			result = 0;
+		} else {
+			double a = hv(front);
+			free(front.points);
+			free(front.objectives);
+			wfg_prep(n, NULL, p, &front, z);
+			double b = front.nPoints ? hv(front) : 0;
+			result = a - b;
+		}
 	} else { /* calculate approximate distance to pareto front (nn) */
 		rwd_t rss[n+1]; rss[0] = n;
 		for (int i = 0; i < n; i++) rss[i+1] = rsa[i];
 		qsort_r(front.points, front.nPoints, sizeof(POINT), polycmp, rss);
 		OBJECTIVE avg[n];
+		int nn = n > front.nPoints ? front.nPoints : n;
 		for (int i = 0; i < n; i++) avg[i] = front.points[0].objectives[i];
-		for (int i = 1; i < n; i++)
+		for (int i = 1; i < nn; i++)
 			for (int j = 0; j < n; j++)
 				avg[j] += front.points[i].objectives[j];
 		for (int i = 0; i < n; i++) {
-			OBJECTIVE d = avg[i]/n - rsa[i];
+			OBJECTIVE d = avg[i]/nn - rsa[i];
 			result -= d * d;
 		}
 	}

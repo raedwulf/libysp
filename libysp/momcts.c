@@ -434,14 +434,14 @@ int momcts_random_walk(struct momcts_s *momcts,
 						(double)ccc->nv/tv;
 				ccc = ccc->next;
 			}
-			/* update the hv */
-			c->act.hv = mohv(n, c->rwd, &cc->obs.front,
-			                 momcts->reference);
 			/* update cc(obs)->rwd */
 			int64_t best = INT64_MIN;
 			union momcts_node_s *bccc = NULL;
 			ccc = cc->chd;
 			while (ccc) {
+				/* update the hv */
+				ccc->act.hv = mohv(n, ccc->rwd, &cc->obs.front,
+						momcts->reference);
 				if (ccc->act.hv >= best) {
 					best = ccc->act.hv;
 					bccc = ccc;
@@ -513,7 +513,7 @@ static void momcts_traverse(struct momcts_s *momcts, union momcts_node_s *node,
 				free(bs);
 				bp = bp->next;
 			}
-			fprintf(out, "\", shape=\"doubleoctagon\"];\n");
+			fprintf(out, "\", shape=doubleoctagon];\n");
 			fprintf(out, "n%p->b%p;\n", (void *)node, (void *)node->obs.bel);
 		}
 		if (momcts->sim->str_rwd) {
@@ -525,7 +525,7 @@ static void momcts_traverse(struct momcts_s *momcts, union momcts_node_s *node,
 				free(rs);
 				pf = pf->next;
 			}
-			fprintf(out, "\", shape=\"pentagon\"];\n");
+			fprintf(out, "\", shape=pentagon];\n");
 			fprintf(out, "n%p->p%p;\n", (void *)node, (void *)node->obs.bel);
 		}
 
