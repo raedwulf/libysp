@@ -375,7 +375,8 @@ int momcts_random_walk(struct momcts_s *momcts,
 				b->state = s;
 				b->next = cc->obs.bel;
 #ifdef BELIEFCHAIN
-				b->parent = pb; pb = b;
+				//b->parent = pb;
+				pb = b;
 				b->r = REWARD_ALLOC();
 				memcpy(b->r, t->r, sizeof(rwd_t) * n);
 				b->rt = REWARD_ALLOC();

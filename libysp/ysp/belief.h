@@ -17,7 +17,7 @@ struct belief_s {
 #endif
 	ste_t state;
 #ifdef BELIEFCHAIN
-	struct belief_s *parent; /* TODO: is this necessary? */
+	//struct belief_s *parent; /* TODO: is this necessary? */
 	//struct belief_s *sibling;
 	//struct belief_s *children;
 	rwd_t *r;

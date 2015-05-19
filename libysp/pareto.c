@@ -144,7 +144,7 @@ int64_t mohv(int n, rwd_t *rsa, struct front_s **P, rwd_t *z)
 		wfg_prep(n, NULL, p, &front, z);
 		double b = front.nPoints ? hv(front) : 0;
 		result = a - b;
-	} else { /* calculate approximate distance to pareto front */
+	} else { /* calculate approximate distance to pareto front (nn) */
 		rwd_t rss[n+1]; rss[0] = n;
 		for (int i = 0; i < n; i++) rss[i+1] = rsa[i];
 		qsort_r(front.points, front.nPoints, sizeof(POINT), polycmp, rss);
