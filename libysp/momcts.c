@@ -499,21 +499,36 @@ static void momcts_traverse(struct momcts_s *momcts, union momcts_node_s *node,
 	}
 	fprintf(out, "\\nv=%u\", shape=%s];\n",
 			node->nv, node->type == NODE_OBS ? "ellipse" : "box");
-	if (0 && node->type == NODE_OBS) {
-		struct belief_s *bp = node->obs.bel;
-		fprintf(out, "b%p[label=\"", (void *)bp);
-		while (bp) {
-			char *bs = momcts->sim->str_ste(bp->state);
+	if (node->type == NODE_OBS) {
+		if (momcts->sim->str_ste) {
+			struct belief_s *bp = node->obs.bel;
+			fprintf(out, "b%p[label=\"", (void *)bp);
+			while (bp) {
+				char *bs = momcts->sim->str_ste(bp->state);
 #ifdef BELIEFCHAIN
-			fprintf(out, "(%s),\\n", bs);
+				fprintf(out, "(%s),\\n", bs);
 #else
-			fprintf(out, "(%s)[%d],\\n", bs, bp->n);
+				fprintf(out, "(%s)[%d],\\n", bs, bp->n);
 #endif
-			free(bs);
-			bp = bp->next;
+				free(bs);
+				bp = bp->next;
+			}
+			fprintf(out, "\", shape=\"doubleoctagon\"];\n");
+			fprintf(out, "n%p->b%p;\n", (void *)node, (void *)node->obs.bel);
 		}
-		fprintf(out, "\", shape=\"doubleoctagon\"];\n");
-		fprintf(out, "n%p->b%p;\n", (void *)node, (void *)node->obs.bel);
+		if (momcts->sim->str_rwd) {
+			struct front_s *pf = node->obs.front;
+			fprintf(out, "p%p[label=\"", (void *)pf);
+			while (pf) {
+				char *rs = momcts->sim->str_rwd(pf->value);
+				fprintf(out, "%s,\\n", rs);
+				free(rs);
+				pf = pf->next;
+			}
+			fprintf(out, "\", shape=\"pentagon\"];\n");
+			fprintf(out, "n%p->p%p;\n", (void *)node, (void *)node->obs.bel);
+		}
+
 	}
 	if (parent)
 		fprintf(out, "n%p->n%p;\n", (void *)parent, (void *)node);
