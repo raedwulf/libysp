@@ -463,61 +463,60 @@ int momcts_random_walk(struct momcts_s *momcts,
 static void momcts_traverse(struct momcts_s *momcts, union momcts_node_s *node,
 		union momcts_node_s *parent, FILE *out)
 {
-	if (parent) {
-		char *ns;
-		if (node->type == NODE_OBS && momcts->sim->str_obs) {
-			ns = momcts->sim->str_obs(node->id);
-			fprintf(out, "n%p[label=\"%s\\n", (void *)node, ns);
-			free(ns);
-		} else if (node->type == NODE_ACT && momcts->sim->str_act) {
-			ns = momcts->sim->str_act(node->id);
-			fprintf(out, "n%p[label=\"%s\\n", (void *)node, ns);
-			free(ns);
-		} else {
-			fprintf(out, "n%p[label=\"%c%d\\n",
-				(void *)node,
-				node->type == NODE_OBS ? 'o' : 'a',
-				node->id);
-		}
-		if (momcts->sim->str_rwd) {
-			/* TODO: fix for arbitrary number of rewards */
-			double r[momcts->sim->reward_count];
-#ifdef EXPANDALLTRACE
-			for (uint32_t i = 0; i < momcts->sim->reward_count; i++)
-				r[i] = node->obs.rwd[i];
-#else
-			for (uint32_t i = 0; i < momcts->sim->reward_count; i++)
-				r[i] = node->obs.rwd[i] / (rwd_t)node->obs.nv;
-#endif
-			char *rs = momcts->sim->str_rwd(r);
-			fprintf(out, "%s\\n", rs);
-			free(rs);
-		}
-		if (node->type == NODE_ACT) {
-			fprintf(out, "hv=%ld\\n", node->act.hv);
-		}
-		fprintf(out, "\\nv=%u\", shape=%s];\n",
-				node->nv, node->type == NODE_OBS ? "ellipse" : "box");
-		if (0 && node->type == NODE_OBS) {
-			struct belief_s *bp = node->obs.bel;
-			fprintf(out, "b%p[label=\"", (void *)bp);
-			while (bp) {
-				char *bs = momcts->sim->str_ste(bp->state);
-#ifdef BELIEFCHAIN
-				fprintf(out, "(%s),\\n", bs);
-#else
-				fprintf(out, "(%s)[%d],\\n", bs, bp->n);
-#endif
-				free(bs);
-				bp = bp->next;
-			}
-			fprintf(out, "\", shape=\"doubleoctagon\"];\n");
-			fprintf(out, "n%p->b%p;\n", (void *)node, (void *)node->obs.bel);
-		}
-		fprintf(out, "n%p->n%p;\n", (void *)parent, (void *)node);
-	} else { /* root */
-		fprintf(out, "n%p[label=\"root\"];\n", (void *)node);
+	char *ns;
+	if (!parent) {
+		fprintf(out, "n%p[label=\"root\\n", (void *)node);
+	} else if (node->type == NODE_OBS && momcts->sim->str_obs) {
+		ns = momcts->sim->str_obs(node->id);
+		fprintf(out, "n%p[label=\"%s\\n", (void *)node, ns);
+		free(ns);
+	} else if (node->type == NODE_ACT && momcts->sim->str_act) {
+		ns = momcts->sim->str_act(node->id);
+		fprintf(out, "n%p[label=\"%s\\n", (void *)node, ns);
+		free(ns);
+	} else {
+		fprintf(out, "n%p[label=\"%c%d\\n",
+			(void *)node,
+			node->type == NODE_OBS ? 'o' : 'a',
+			node->id);
 	}
+	if (momcts->sim->str_rwd) {
+		/* TODO: fix for arbitrary number of rewards */
+		double r[momcts->sim->reward_count];
+#ifdef EXPANDALLTRACE
+		for (uint32_t i = 0; i < momcts->sim->reward_count; i++)
+			r[i] = node->obs.rwd[i];
+#else
+		for (uint32_t i = 0; i < momcts->sim->reward_count; i++)
+			r[i] = node->obs.rwd[i] / (rwd_t)node->obs.nv;
+#endif
+		char *rs = momcts->sim->str_rwd(r);
+		fprintf(out, "%s\\n", rs);
+		free(rs);
+	}
+	if (node->type == NODE_ACT) {
+		fprintf(out, "hv=%ld\\n", node->act.hv);
+	}
+	fprintf(out, "\\nv=%u\", shape=%s];\n",
+			node->nv, node->type == NODE_OBS ? "ellipse" : "box");
+	if (0 && node->type == NODE_OBS) {
+		struct belief_s *bp = node->obs.bel;
+		fprintf(out, "b%p[label=\"", (void *)bp);
+		while (bp) {
+			char *bs = momcts->sim->str_ste(bp->state);
+#ifdef BELIEFCHAIN
+			fprintf(out, "(%s),\\n", bs);
+#else
+			fprintf(out, "(%s)[%d],\\n", bs, bp->n);
+#endif
+			free(bs);
+			bp = bp->next;
+		}
+		fprintf(out, "\", shape=\"doubleoctagon\"];\n");
+		fprintf(out, "n%p->b%p;\n", (void *)node, (void *)node->obs.bel);
+	}
+	if (parent)
+		fprintf(out, "n%p->n%p;\n", (void *)parent, (void *)node);
 
 	union momcts_node_s *c = node->chd;
 	while (c) {
