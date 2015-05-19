@@ -221,7 +221,7 @@ int cw_act(uint64_t n, int e, struct cw_state_s *s, act_t a, obs_t *o, rwd_t *r)
 {
 	if (s->terminal) {
 		*o = OT;
-		r[0] = -75;
+		r[0] = s->terminal == 1 ? -75 : 0;
 		r[1] = -s->y + s->x-WIDTH+1;
 		return 1;
 	}
@@ -269,7 +269,7 @@ int cw_act(uint64_t n, int e, struct cw_state_s *s, act_t a, obs_t *o, rwd_t *r)
 		*o = OG;
 		r[0] = 0;
 		r[1] = 0;
-		s->terminal = 1;
+		s->terminal = 2;
 		return 0;
 	}
 

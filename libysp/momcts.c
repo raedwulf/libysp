@@ -32,8 +32,12 @@ void ucb(struct momcts_s *momcts, struct momcts_act_s *c, rwd_t *rsa)
 			rsa[i] += o->rwd[i];
 		o = o->next;
 	}
-	for (uint32_t i = 0; i < momcts->sim->reward_count; i++)
-		rsa[i] = rsa[i]/(rwd_t)tnv + sqrt(momcts->c[i] * log(c->par->nv)/(double)tnv);
+	for (uint32_t i = 0; i < momcts->sim->reward_count; i++) {
+#ifndef EXPANDALLTRACE
+		rsa[i] /= (rwd_t)rsa[i];
+#endif
+		rsa[i] = rsa[i] + sqrt(momcts->c[i] * log(c->par->nv)/(double)tnv);
+	}
 }
 
 int momcts_init(struct momcts_s *momcts)
@@ -92,7 +96,6 @@ int momcts_search(struct momcts_s *momcts,
 	struct momcts_obs_s *no = &node->obs;
 	struct belief_s *b = no->bel;
 	rwd_t r[momcts->sim->reward_count];
-	memset(r, 0, sizeof(r));
 #if PARETO == 1
 	momcts->front = NULL;
 #endif
@@ -102,6 +105,7 @@ int momcts_search(struct momcts_s *momcts,
 			xs1024_s(&(momcts->random)) : UINT64_MAX;
 		for (uint64_t i = 0; i < 64 && n; i++) {
 			if (bits & 1) {
+				memset(r, 0, sizeof(r));
 				momcts_tree_walk(momcts, node, b, r);
 				n--;
 			}
@@ -138,9 +142,6 @@ int momcts_tree_walk(struct momcts_s *momcts,
 			ucb(momcts, c, rsa);
 			int64_t gx = mohv(momcts->sim->reward_count,
 				          rsa, P, momcts->reference);
-#if PARETO == 2
-			c->gx = gx;
-#endif
 			if (gx > max) {
 				max = gx;
 				mc = c;
@@ -175,6 +176,7 @@ int momcts_tree_walk(struct momcts_s *momcts,
 			 * action & observation node and cumulative reward */
 			mc->nv += v;
 			n->nv += v;
+#ifndef EXPANDALLTRACE
 			for (uint32_t i = 0; i < momcts->sim->reward_count; i++) {
 #ifdef BELIEFCHAIN
 				//TODO: Check probably already added in from reward before?
@@ -182,6 +184,7 @@ int momcts_tree_walk(struct momcts_s *momcts,
 #endif
 				n->obs.rwd[i] += reward[i];
 			}
+#endif
 			return v;
 		}
 	}
@@ -240,6 +243,7 @@ int momcts_tree_walk(struct momcts_s *momcts,
 
 	/* update the visit count of the current node and cumulative reward */
 	n->nv += v;
+#ifndef EXPANDALLTRACE
 	for (uint32_t i = 0; i < momcts->sim->reward_count; i++) {
 #ifdef BELIEFCHAIN
 		//TODO: Check probably already added in from reward before?
@@ -247,6 +251,7 @@ int momcts_tree_walk(struct momcts_s *momcts,
 #endif
 		n->obs.rwd[i] += reward[i];
 	}
+#endif
 	return v;
 }
 
@@ -277,6 +282,17 @@ int momcts_random_walk(struct momcts_s *momcts,
 				sr[j][k] = ITS(instance->trace,n,j)->r[k] +
 					sr[j+1][k];
 		}
+		/* the total cumulative reward for this simulation is */
+		for (uint32_t i = 0; i < n; i++)
+#ifdef BELIEFCHAIN
+			reward[i] += sr[0][i];
+#else
+			reward[i] = p->obs.rwd[i];
+#ifndef EXPANDALLTRACE
+			reward[i] /= p->nv;
+#endif
+			reward[i] += sr[0][i];
+#endif
 		union momcts_node_s *cc;
 		for (int j = 0; j < instance->length; j++) {
 			cc = NULL;
@@ -314,6 +330,8 @@ int momcts_random_walk(struct momcts_s *momcts,
 				/* TODO: add to front c->act.front */
 				c->par = parent;
 				c->next = parent->chd;
+				c->rwd = REWARD_ALLOC();
+				memset(c->rwd, 0, sizeof(rwd_t) * n);
 				parent->chd = c;
 				expand = true;
 			}
@@ -328,8 +346,13 @@ int momcts_random_walk(struct momcts_s *momcts,
 				cc->next = c->chd;
 				c->chd = cc;
 				cc->obs.bel = NULL;
-				cc->obs.rwd = REWARD_ALLOC();
-				memset(cc->obs.rwd, 0, sizeof(rwd_t) * n);
+				cc->rwd = REWARD_ALLOC();
+#ifdef EXPANDALLTRACE
+				for (uint32_t i = 0; i < n; i++)
+					cc->rwd[i] = reward[i];
+#else
+				memset(cc->rwd, 0, sizeof(rwd_t) * n);
+#endif
 				expand = true;
 			}
 			/* update the beliefs */
@@ -363,10 +386,16 @@ int momcts_random_walk(struct momcts_s *momcts,
 				cc->obs.bel = b;
 			}
 			cc->obs.nb++;
-			/* add to the cumulative rewards */
+#ifdef EXPANDALLTRACE
+			if (!cc->chd) {
+				for (uint32_t i = 0; i < n; i++)
+					cc->rwd[i] = (cc->rwd[i] * c->nv + reward[i]) / (c->nv + 1);
+			}
+#else
+			/* add to the cumulative rewards that come after */
 			for (uint32_t i = 0; i < n; i++)
-				cc->obs.rwd[i] += r[i];
-			/* add the parents avg reward */
+				cc->obs.rwd[i] += reward[i];
+#endif
 			/* visited once more */
 			c->nv++;
 			cc->nv++;
@@ -378,23 +407,52 @@ int momcts_random_walk(struct momcts_s *momcts,
 			if (expand) break;
 #endif
 		}
-		/* the total cumulative reward for this simulation is */
-		for (uint32_t i = 0; i < n; i++)
-#ifdef BELIEFCHAIN
-			reward[i] += sr[0][i];
-#else
-			reward[i] = sr[0][i] + p->obs.rwd[i] / p->nv;
-#endif
 #if PARETO == 1
 		struct front_s **P = &momcts->front;
 		pareto_add(momcts->archive, n, P, reward);
 #elif PARETO == 2
 		assert(cc);
-		struct front_s **P = &cc->obs.front;
-		do {
-			if (!pareto_add(momcts->archive, n, P, reward))
-				break;
-		} while (cc->par && (cc = cc->par->par));
+		int d = pareto_add(momcts->archive, n, &cc->obs.front, reward);
+		while (d && (c = cc->par) && (cc = cc->par->par)) {
+			d = pareto_add(momcts->archive, n, &cc->obs.front,
+			                reward);
+#ifdef EXPANDALLTRACE
+			/* cc is parent of c */
+			/* update c(act)->rwd */
+			union momcts_node_s *ccc = c->chd;
+			double tv = 0;
+			while (ccc) {
+				tv += ccc->nv;
+				ccc = ccc->next;
+			}
+			for (uint32_t i = 0; i < n; i++) c->rwd[i] = 0;
+			ccc = c->chd;
+			while (ccc) {
+				for (uint32_t i = 0; i < n; i++)
+					c->rwd[i] += ccc->rwd[i] *
+						(double)ccc->nv/tv;
+				ccc = ccc->next;
+			}
+			/* update the hv */
+			c->act.hv = mohv(n, c->rwd, &cc->obs.front,
+			                 momcts->reference);
+			/* update cc(obs)->rwd */
+			int64_t best = INT64_MIN;
+			union momcts_node_s *bccc = NULL;
+			ccc = cc->chd;
+			while (ccc) {
+				if (ccc->act.hv >= best) {
+					best = ccc->act.hv;
+					bccc = ccc;
+				}
+				ccc = ccc->next;
+			}
+			if (bccc) {
+				for (uint32_t i = 0; i < n; i++)
+					cc->rwd[i] = bccc->rwd[i];
+			}
+#endif
+		}
 #endif
 	}
 	return mi;
@@ -420,16 +478,22 @@ static void momcts_traverse(struct momcts_s *momcts, union momcts_node_s *node,
 				node->type == NODE_OBS ? 'o' : 'a',
 				node->id);
 		}
-		if (node->type == NODE_OBS && momcts->sim->str_rwd) {
+		if (momcts->sim->str_rwd) {
 			/* TODO: fix for arbitrary number of rewards */
 			double r[momcts->sim->reward_count];
+#ifdef EXPANDALLTRACE
+			for (uint32_t i = 0; i < momcts->sim->reward_count; i++)
+				r[i] = node->obs.rwd[i];
+#else
 			for (uint32_t i = 0; i < momcts->sim->reward_count; i++)
 				r[i] = node->obs.rwd[i] / (rwd_t)node->obs.nv;
+#endif
 			char *rs = momcts->sim->str_rwd(r);
-			fprintf(out, "%s", rs);
+			fprintf(out, "%s\\n", rs);
 			free(rs);
-		} else if (node->type == NODE_ACT) {
-			fprintf(out, "gx=%ld\\n", node->act.gx);
+		}
+		if (node->type == NODE_ACT) {
+			fprintf(out, "hv=%ld\\n", node->act.hv);
 		}
 		fprintf(out, "\\nv=%u\", shape=%s];\n",
 				node->nv, node->type == NODE_OBS ? "ellipse" : "box");

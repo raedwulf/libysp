@@ -29,11 +29,10 @@ struct momcts_act_s {
 	struct momcts_obs_s  *par;
 	struct momcts_obs_s  *chd;
 	act_t                 id;
+	rwd_t                *rwd; /* best reward avg */
 
-#if PARETO == 1
-	rwd_t                *rwd; /* avg score of remaining simulation steps */
-#else
-	int64_t               gx;
+#if PARETO == 2
+	int64_t               hv;
 #endif
 };
 
@@ -45,8 +44,8 @@ struct momcts_obs_s {
 	struct momcts_act_s  *par;
 	struct momcts_act_s  *chd;
 	obs_t                 id;
-
 	rwd_t                *rwd; /* avg score of remaining simulation steps */
+
 	uint32_t              nb;
 	struct belief_s      *bel;
 
@@ -63,7 +62,7 @@ union momcts_node_s {
 		union momcts_node_s *par;
 		union momcts_node_s *chd;
 		nid_t                id;
-		rwd_t                *rwd; /* avg score of remaining simulation steps */
+		rwd_t                *rwd;
 	};
 	struct momcts_act_s          act;
 	struct momcts_obs_s          obs;

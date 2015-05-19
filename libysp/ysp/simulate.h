@@ -62,6 +62,7 @@ struct simulation_s {
 	/* functions for interfacing model */
 	int (*run)(struct instance_s *, void *, act_t);
 	int (*allowed)(struct belief_s *, size_t *);
+	//double (*poba)(obs_t, act_t, struct belief_s *);
 	char *(*str_act)(act_t a);
 	char *(*str_obs)(obs_t o);
 	char *(*str_ste)(ste_t s);

@@ -35,7 +35,7 @@ static int wfg_prep(int n, rwd_t *r, struct front_s *ps, FRONT *front,
 		if (r) {
 			int d = dominate(n, r, p->value);
 			if (d == 0) { /* non-dominated */
-			} else if (d < 0) { /* r dominates p */
+			} else if (d > 0) { /* r dominates p */
 				p = p->next;
 				continue;
 			} else { /* r is dominated by p */
@@ -101,7 +101,7 @@ int pareto_add(struct mempool_s *m, int n, struct front_s **P, rwd_t *r)
 			if (d == 0) { /* non-dominated */
 				lp = p;
 				p = p->next;
-			} else if (d < 0) { /* r dominates p */
+			} else if (d > 0) { /* r dominates p */
 				if (lp)
 					lp->next = p->next;
 				else
