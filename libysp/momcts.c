@@ -500,7 +500,7 @@ static void momcts_traverse(struct momcts_s *momcts, union momcts_node_s *node,
 	fprintf(out, "\\nv=%u\", shape=%s];\n",
 			node->nv, node->type == NODE_OBS ? "ellipse" : "box");
 	if (node->type == NODE_OBS) {
-		if (momcts->sim->str_ste) {
+		if (0 && momcts->sim->str_ste) {
 			struct belief_s *bp = node->obs.bel;
 			fprintf(out, "b%p[label=\"", (void *)bp);
 			while (bp) {
@@ -526,7 +526,7 @@ static void momcts_traverse(struct momcts_s *momcts, union momcts_node_s *node,
 				pf = pf->next;
 			}
 			fprintf(out, "\", shape=pentagon];\n");
-			fprintf(out, "n%p->p%p;\n", (void *)node, (void *)node->obs.bel);
+			fprintf(out, "p%p-n%p;\n", (void *)node, (void *)node->obs.front);
 		}
 
 	}
