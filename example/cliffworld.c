@@ -150,7 +150,7 @@ int main(int argc, char **argv)
 		.sim = &sim,
 		.reference = reference,
 		.c = paramc,
-		.b = 8
+		.b = 2
 	};
 	momcts_init(&momcts);
 
@@ -188,6 +188,17 @@ int main(int argc, char **argv)
 	FILE *f = fopen("cw.dot", "w");
 	momcts_dot(&momcts, NULL, "cw", f);
 	fclose(f);
+
+	union momcts_node_s *c = root.chd;
+	int i = 0;
+	while (c) {
+		char buffer[16];
+		snprintf(buffer, sizeof(buffer), "cwp%01d.dot", i++);
+		FILE *f = fopen(buffer, "w");
+		momcts_policy_dot(&momcts, c, "cw", f);
+		fclose(f);
+		c = c->next;
+	}
 
 	printf("Node memory: %ld\n",
 			momcts.nodes->el_total * momcts.nodes->el_size);
@@ -313,6 +324,7 @@ int cw_run(struct instance_s *i, void *sv, act_t a)
 
 	struct trace_step_s *t = ITS(i->trace, 2, e);
 	cw_act(n, 0, &s, a, &t->o, t->r);
+	n >>= 1;
 	t->a = a;
 	t->s = ss;
 	assert((t->a != AT) || (t->a == AT && t->o == OT));
@@ -323,12 +335,7 @@ int cw_run(struct instance_s *i, void *sv, act_t a)
 	if (!t->a)
 		return e;
 
-	for (; e < 32; e++) {
-		if ((e & (sizeof(n) * 8 - 1)) == 0)
-			n = xs1024_s(r);
-		else
-			n >>= 1;
-
+	for (; e < 32; e++, n>>=1) {
 		t = ITS(i->trace, 2, e);
 
 		size_t allowed;

@@ -117,5 +117,7 @@ int momcts_random_walk(struct momcts_s *momcts,
 		       rwd_t *reward);
 int momcts_dot(struct momcts_s *momcts, union momcts_node_s *node,
 		const char *name, FILE *out);
+int momcts_policy_dot(struct momcts_s *momcts, union momcts_node_s *node,
+		const char *name, FILE *out);
 
 #endif

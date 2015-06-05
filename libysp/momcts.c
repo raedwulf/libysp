@@ -414,7 +414,7 @@ int momcts_random_walk(struct momcts_s *momcts,
 #elif PARETO == 2
 		assert(cc);
 		int d = pareto_add(momcts->archive, n, &cc->obs.front, reward);
-		while (d && (c = cc->par) && (cc = cc->par->par)) {
+		while ((c = cc->par) && (cc = cc->par->par)) {
 			d = pareto_add(momcts->archive, n, &cc->obs.front,
 			                reward);
 #ifdef EXPANDALLTRACE
@@ -459,8 +459,7 @@ int momcts_random_walk(struct momcts_s *momcts,
 	return mi;
 }
 
-/* TODO: fprintf might fail... to be correct, we should handle this; return int */
-static void momcts_traverse(struct momcts_s *momcts, union momcts_node_s *node,
+static void momcts_node_name(struct momcts_s *momcts, union momcts_node_s *node,
 		union momcts_node_s *parent, FILE *out)
 {
 	char *ns;
@@ -480,6 +479,14 @@ static void momcts_traverse(struct momcts_s *momcts, union momcts_node_s *node,
 			node->type == NODE_OBS ? 'o' : 'a',
 			node->id);
 	}
+}
+
+
+/* TODO: fprintf might fail... to be correct, we should handle this; return int */
+static void momcts_traverse(struct momcts_s *momcts, union momcts_node_s *node,
+		union momcts_node_s *parent, FILE *out)
+{
+	momcts_node_name(momcts, node, parent, out);
 	if (momcts->sim->str_rwd) {
 		/* TODO: fix for arbitrary number of rewards */
 		double r[momcts->sim->reward_count];
@@ -526,7 +533,7 @@ static void momcts_traverse(struct momcts_s *momcts, union momcts_node_s *node,
 				pf = pf->next;
 			}
 			fprintf(out, "\", shape=pentagon];\n");
-			fprintf(out, "p%p-n%p;\n", (void *)node, (void *)node->obs.front);
+			fprintf(out, "p%p->n%p;\n", (void *)node->obs.front, (void *)node);
 		}
 
 	}
@@ -540,11 +547,51 @@ static void momcts_traverse(struct momcts_s *momcts, union momcts_node_s *node,
 	}
 }
 
+static void momcts_policy_traverse(struct momcts_s *momcts,
+		union momcts_node_s *node,
+		union momcts_node_s *parent,
+		FILE *out)
+{
+	momcts_node_name(momcts, node, parent, out);
+	fprintf(out, "\\nshape=%s];\n",
+			node->type == NODE_OBS ? "ellipse" : "box");
+	union momcts_node_s *c = node->chd;
+	if (node->type == NODE_OBS) {
+		int64_t best = INT64_MIN;
+		union momcts_node_s *bestc = NULL;
+		while (c) {
+			if (best < c->act.hv) {
+				best = c->act.hv;
+				bestc = c;
+			}
+			c = c->next;
+		}
+		if (bestc)
+			momcts_policy_traverse(momcts, bestc, node, out);
+	} else {
+		while (c) {
+			momcts_policy_traverse(momcts, c, node, out);
+			c = c->next;
+		}
+	}
+	if (parent)
+		fprintf(out, "n%p->n%p;\n", (void *)parent, (void *)node);
+}
+
 int momcts_dot(struct momcts_s *momcts, union momcts_node_s *node,
 		const char *name, FILE *out)
 {
 	fprintf(out, "digraph %s {\n", name ? name : "out");
 	momcts_traverse(momcts, node ? node : momcts->root, NULL, out);
+	fprintf(out, "}\n");
+	return 0;
+}
+
+int momcts_policy_dot(struct momcts_s *momcts, union momcts_node_s *node,
+		const char *name, FILE *out)
+{
+	fprintf(out, "digraph %s {\n", name ? name : "out");
+	momcts_policy_traverse(momcts, node ? node : momcts->root, NULL, out);
 	fprintf(out, "}\n");
 	return 0;
 }
