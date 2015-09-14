@@ -26,4 +26,4 @@ Part of the software contains an implementation of the WFG algorithm used to
 calculate exact hypervolumes.  This is included in the source code in
 libysp/wfg.{c,h} in a slightly modified form to be interfaced.
 The original work can be found in the github repository
-[lbradstreet/WFG-clj] (https://github.com/lbradstreet/WFG-clj).
+[lbradstreet/WFG-hypervolume] (https://github.com/lbradstreet/WFG-hypervolume).

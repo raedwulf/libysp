@@ -6,9 +6,9 @@
 
 /*
    +--+--+--+--+
-   |  |  |  |  |
+   |  |V |V |  |
    +--+--+--+--+
-   |  |  |  |  |
+   |  |V |V |  |
    +--+--+--+--+
    |  |V |V |  |
    +--+--+--+--+
@@ -58,12 +58,6 @@ struct cw_state_s {
 #define OG (OT|(1<<4))
 
 #define LOC(x,y) ((uint8_t)((x << 2) | y))
-
-static char *world =
-"    "
-"    "
-"    "
-"SXXG";
 
 int cw_allowed(struct belief_s *b, size_t *a);
 int cw_run(struct instance_s *i, void *s, act_t a);
@@ -184,7 +178,7 @@ int main(int argc, char **argv)
 	root.obs.rwd[0] = 0;
 	root.obs.rwd[1] = 0;
 	
-	momcts_search(&momcts, &root, 1000);
+	momcts_search(&momcts, &root, 10000);
 	FILE *f = fopen("cw.dot", "w");
 	momcts_dot(&momcts, NULL, "cw", f);
 	fclose(f);
@@ -228,6 +222,9 @@ int main(int argc, char **argv)
 	return 0;
 }
 
+#define LOWPROB
+#define SAFETYMODEL
+
 int cw_act(uint64_t n, int e, struct cw_state_s *s, act_t a, obs_t *o, rwd_t *r)
 {
 	if (s->terminal) {
@@ -242,8 +239,12 @@ int cw_act(uint64_t n, int e, struct cw_state_s *s, act_t a, obs_t *o, rwd_t *r)
 	//r[1] = -s->y + s->x-WIDTH+1;
 
 	/* may slip */
-	if (s->x > 0 && s->x < WIDTH) {
+	if (s->x > 0 && s->x < WIDTH - 1) {
+#ifndef LOWPROB
 		if (n & 1) {
+#else
+		if (n < (UINT64_MAX/1000000)) {
+#endif
 			s->y--;
 			*o = OS;
 		}
@@ -298,10 +299,46 @@ int cw_allowed(struct belief_s *b, size_t *a)
 	while (bp) {
 		struct cw_state_s *s = bp->state;
 		if (!s->terminal) nt = true;
-		if (s->y < HEIGHT - 1) a[0] |= (1 << AU);
+
+		/* can't leave map */
+		if (s->y < HEIGHT) a[0] |= (1 << AU);
 		if (s->y > 0) a[0] |= (1 << AD);
 		if (s->x < WIDTH - 1) a[0] |= (1 << AR);
 		if (s->x > 0) a[0] |= (1 << AL);
+
+		//if ((s->x == 0 && s->y == 0))
+		//	a[0] &= ~(1 << AR);
+		//if ((s->x == 3 && s->y == 0))
+		//	a[0] &= ~(1 << AL);
+
+#ifdef SAFETYMODEL
+
+#define ABS(x) ((x) < 0 ? -(x) : (x))
+#define MANHATTAN(x1,y1,x2,y2) (ABS(((x2)-(x1)) + ABS((y2)-(y1))))
+#define ONSLOPE(x) ((x) == 1 || (x) == 2)
+
+		/* predict where the robot will be when action performed */
+		int ux = s->x, uy = s->y + 1;
+		int dx = s->x, dy = s->y - 1;
+		int lx = s->x - 1, ly = s->y;
+		int rx = s->x + 1, ry = s->y;
+
+		/* edge locations */
+		int ex1 = 1, ey1 = 0;
+		int ex2 = 2, ey2 = 0;
+
+		/* too close to cliff edge if on slope */
+		/* (keep manhattan dist. of 1 away from edge) */
+		if (ONSLOPE(rx) && ((ry - ey1) <= 1 || (ry - ey2) <= 1))
+			a[0] &= ~(1 << AR);
+		if (ONSLOPE(lx) && ((ly - ey1) <= 1 || (ly - ey2) <= 1))
+			a[0] &= ~(1 << AL);
+		/* don't move down on the slope */
+		if (ONSLOPE(s->x) && ONSLOPE(dx))
+			a[0] &= ~(1 << AD);
+		
+#endif
+
 		bp = bp->next;
 	}
 	a[0] = nt ? a[0] : 0;
@@ -311,7 +348,9 @@ int cw_allowed(struct belief_s *b, size_t *a)
 int cw_run(struct instance_s *i, void *sv, act_t a)
 {
 	struct xs_state_s *r = &i->random;
+#ifndef LOWPROB
 	uint64_t n = xs1024_s(r);
+#endif
 
 	struct cw_state_s s;
 	struct cw_state_s *ss = i->states;
@@ -323,6 +362,9 @@ int cw_run(struct instance_s *i, void *sv, act_t a)
 	int e = 0;
 
 	struct trace_step_s *t = ITS(i->trace, 2, e);
+#ifdef LOWPROB
+	uint64_t n = xs1024_s(r);
+#endif
 	cw_act(n, 0, &s, a, &t->o, t->r);
 	n >>= 1;
 	t->a = a;
@@ -354,6 +396,9 @@ int cw_run(struct instance_s *i, void *sv, act_t a)
 		}
 
 		t->a = s.terminal ? 0 : t->a;
+#ifdef LOWPROB
+		uint64_t n = xs1024_s(r);
+#endif
 		cw_act(n, e, &s, t->a, &t->o, t->r);
 		assert((t->a != AT) || (t->a == AT && t->o == OT));
 		t->s = ss;

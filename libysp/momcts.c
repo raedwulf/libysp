@@ -460,7 +460,7 @@ int momcts_random_walk(struct momcts_s *momcts,
 }
 
 static void momcts_node_name(struct momcts_s *momcts, union momcts_node_s *node,
-		union momcts_node_s *parent, FILE *out)
+		int parent, FILE *out)
 {
 	char *ns;
 	if (!parent) {
@@ -486,7 +486,7 @@ static void momcts_node_name(struct momcts_s *momcts, union momcts_node_s *node,
 static void momcts_traverse(struct momcts_s *momcts, union momcts_node_s *node,
 		union momcts_node_s *parent, FILE *out)
 {
-	momcts_node_name(momcts, node, parent, out);
+	momcts_node_name(momcts, node, !!parent, out);
 	if (momcts->sim->str_rwd) {
 		/* TODO: fix for arbitrary number of rewards */
 		double r[momcts->sim->reward_count];
@@ -547,19 +547,21 @@ static void momcts_traverse(struct momcts_s *momcts, union momcts_node_s *node,
 	}
 }
 
+/* TODO: this policy graph output doesn't work properly as yet */
 static void momcts_policy_traverse(struct momcts_s *momcts,
 		union momcts_node_s *node,
 		union momcts_node_s *parent,
 		FILE *out)
 {
-	momcts_node_name(momcts, node, parent, out);
-	fprintf(out, "\\nshape=%s];\n",
+	momcts_node_name(momcts, node, 1, out);
+	fprintf(out, "\", shape=%s];\n",
 			node->type == NODE_OBS ? "ellipse" : "box");
 	union momcts_node_s *c = node->chd;
 	if (node->type == NODE_OBS) {
 		int64_t best = INT64_MIN;
 		union momcts_node_s *bestc = NULL;
 		while (c) {
+			/* TODO: check local pareto fronts rather than use hypervolume value */
 			if (best < c->act.hv) {
 				best = c->act.hv;
 				bestc = c;
